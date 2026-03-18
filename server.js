@@ -26,19 +26,19 @@ const MENUS = {
     name: 'からあげ弁当',
     price: 850,
     description: 'ジューシーな唐揚げが人気の定番弁当',
-    imageUrl: 'https://example.com/images/karaage.jpg'
+    imageUrl: 'https://wp.me/ah8X1c-2Q'
   },
   shogayaki: {
     name: '生姜焼き弁当',
     price: 900,
     description: '香ばしく焼き上げたごはんが進む一品',
-    imageUrl: 'https://example.com/images/shogayaki.jpg'
+    imageUrl: 'https://wp.me/ah8X1c-2P'
   },
   hamburger: {
     name: 'ハンバーグ弁当',
     price: 950,
     description: '肉厚ハンバーグを楽しめる満足弁当',
-    imageUrl: 'https://example.com/images/hamburger.jpg'
+    imageUrl: 'https://wp.me/ah8X1c-2M'
   }
 };
 
