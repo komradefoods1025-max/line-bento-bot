@@ -6,6 +6,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 
 const sessions = new Map();
 const reservations = [];
@@ -199,6 +200,16 @@ async function handleEvent(event) {
         status: '受付済み',
         createdAt: new Date().toISOString()
       };
+
+      const saveResult = await saveReservationToSheet(reservation);
+
+      if (!saveResult.ok) {
+        console.error('sheet save error:', saveResult.error);
+        await replyMessage(replyToken, [
+          textMessage('予約内容の保存でエラーが起きました。もう一度お試しください。')
+        ]);
+        return;
+      }
 
       reservations.push(reservation);
       console.log('reservation saved:', reservation);
@@ -423,6 +434,30 @@ async function replyMessage(replyToken, messages) {
 
   if (!response.ok) {
     throw new Error(`Reply API error: ${response.status} ${text}`);
+  }
+}
+
+async function saveReservationToSheet(reservation) {
+  if (!RESERVATION_SAVE_URL) {
+    return { ok: false, error: 'RESERVATION_SAVE_URL が未設定です' };
+  }
+
+  try {
+    const response = await fetch(RESERVATION_SAVE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(reservation),
+      redirect: 'follow'
+    });
+
+    const text = await response.text();
+    console.log('sheet response:', text);
+
+    return { ok: true, responseText: text };
+  } catch (err) {
+    return { ok: false, error: String(err) };
   }
 }
 
