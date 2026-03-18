@@ -230,7 +230,7 @@ async function handleEvent(event) {
 
       await replyMessage(replyToken, [
         textMessage(
-          'ご予約ありがとうございます。\n\n' +
+          'ご予約ありがとうございます😊\n\n' +
           `【予約番号】${reservationNo}\n` +
           `【受取日】${reservation.date}\n` +
           `【受取時間】${reservation.time}\n` +
