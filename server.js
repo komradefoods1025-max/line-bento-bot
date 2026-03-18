@@ -326,7 +326,7 @@ function buildDatePickerMessage() {
     type: 'text',
     text:
       `受取日を選んでください。\n` +
-      `ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。`,
+      `ご予約は${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。`,
     quickReply: {
       items: [
         {
@@ -434,7 +434,7 @@ function buildReservationCompleteMessage(reservation) {
       `お名前：${reservation.name}\n` +
       `電話番号：${reservation.phone}\n\n` +
       `※お支払いは店頭にてお願いいたします。\n` +
-      `※ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}22:00締切です。\n` +
+      `※ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00締切です。\n` +
       `※受付番号をご来店時にお伝えください。`
   };
 }
