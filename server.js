@@ -92,23 +92,48 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'pick_date') {
-      const selectedDate = event.postback?.params?.date || '';
+  const selectedDate = event.postback?.params?.date || '';
 
-      if (!selectedDate) {
-        await replyMessage(replyToken, [
-          textMessage('日付を取得できませんでした。もう一度お試しください。'),
-          buildDatePickerMessage()
-        ]);
-        return;
-      }
+  if (!selectedDate) {
+    await replyMessage(replyToken, [
+      textMessage('日付を取得できませんでした。もう一度お試しください。'),
+      buildDatePickerMessage()
+    ]);
+    return;
+  }
 
-      if (!isTomorrowOrLater(selectedDate)) {
-        await replyMessage(replyToken, [
-          textMessage('受取日は翌日以降で選んでください。'),
-          buildDatePickerMessage()
-        ]);
-        return;
-      }
+  if (!isTomorrowOrLater(selectedDate)) {
+    await replyMessage(replyToken, [
+      textMessage('受取日は翌日以降で選んでください。'),
+      buildDatePickerMessage()
+    ]);
+    return;
+  }
+
+  session.date = selectedDate;
+  session.step = 'waiting_time';
+
+  await replyMessage(replyToken, [
+    textMessage(`受取日：${selectedDate}`),
+    buildTimeMessage()
+  ]);
+  return;
+}
+
+これで、日付を選んだあとにトーク履歴へ
+
+受取日：2026-03-19
+
+みたいにbotからの確認メッセージが残ります。
+見た目としてはかなりわかりやすくなります。
+
+もし 「ユーザーが送ったように見せたい」 なら、datetime picker ではなく
+postback + displayText か message action を使う必要があります。
+ただその場合は、カレンダー型の日時選択ではなくなります。 displayText があるのは postback action 側です。
+
+おすすめは、今のカレンダーはそのまま使って、
+日付選択後に bot が確認文を返す 形です。
+必要なら次に、時間選択も同じように「受取時間：12:00」と履歴表示する版 もまとめる。
 
       session.date = selectedDate;
       session.step = 'waiting_time';
