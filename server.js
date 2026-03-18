@@ -453,7 +453,7 @@ function startGuideMessage() {
 function buildDateOptionsMessage(dateOptions) {
   return {
     type: 'text',
-    text: '受取日を選んでください。',
+    text: '受取日を選んでください📅',
     quickReply: {
       items: dateOptions.map((item) =>
         quickPostbackItem(item.label, `action=pick_date&date=${encodeURIComponent(item.date)}`, item.label)
@@ -465,7 +465,7 @@ function buildDateOptionsMessage(dateOptions) {
 function buildTimeMessage() {
   return {
     type: 'text',
-    text: '受取時間を選んでください。',
+    text: '受取時間を選んでください⏰',
     quickReply: {
       items: PICKUP_TIMES.map((time) =>
         quickPostbackItem(time, `action=time&value=${encodeURIComponent(time)}`, time)
@@ -478,7 +478,7 @@ function buildMenuMessage(session) {
   const dailyMenu = session.dailyMenu || DEFAULT_DAILY_MENU;
 
   const menuText =
-    'ご希望のお弁当を選んでください。\n\n' +
+    'ご希望のお弁当をお選びください🍚🍖\n\n' +
     `・からあげ弁当 ¥${MENUS.karaage.price}\n` +
     `・生姜焼き弁当 ¥${MENUS.shogayaki.price}\n` +
     `・ハンバーグ弁当 ¥${MENUS.hamburger.price}\n` +
@@ -515,14 +515,19 @@ function buildMenuMessage(session) {
 function buildQtyMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName} の個数を選んでください。`,
+    text: `${menuName} の個数を選んでください🍱`,
     quickReply: {
       items: [
         quickPostbackItem('1個', 'action=qty&value=1', '1個'),
         quickPostbackItem('2個', 'action=qty&value=2', '2個'),
         quickPostbackItem('3個', 'action=qty&value=3', '3個'),
         quickPostbackItem('4個', 'action=qty&value=4', '4個'),
-        quickPostbackItem('5個', 'action=qty&value=5', '5個')
+        quickPostbackItem('5個', 'action=qty&value=5', '5個'),
+        quickPostbackItem('6個', 'action=qty&value=6', '6個'),
+        quickPostbackItem('7個', 'action=qty&value=7', '7個'),
+        quickPostbackItem('8個', 'action=qty&value=8', '8個'),
+        quickPostbackItem('9個', 'action=qty&value=9', '9個'),
+        quickPostbackItem('10個', 'action=qty&value=10', '10個')
       ]
     }
   };
@@ -531,7 +536,7 @@ function buildQtyMessage(menuName) {
 function buildCartSummaryMessage(session) {
   const items = session.items || [];
   return textMessage(
-    '現在のご注文内容です。\n\n' +
+    '現在のご注文内容です🛍️\n\n' +
     formatOrderLines(items) +
     `\n合計個数：${getCartTotalQty(items)}個` +
     `\n注文合計：¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}`
@@ -541,7 +546,7 @@ function buildCartSummaryMessage(session) {
 function buildCartActionMessage() {
   return {
     type: 'text',
-    text: '続けて商品を追加するか、注文内容を確認してください。',
+    text: '続けて商品を追加するか、注文内容を確認してください🔍',
     quickReply: {
       items: [
         quickPostbackItem('他の商品を追加', 'action=add_more', '他の商品を追加'),
@@ -557,13 +562,13 @@ function buildConfirmMessage(session) {
   return {
     type: 'text',
     text:
-      '以下の内容で予約します。\n\n' +
+      '以下の内容でよろしければ予約確定ボタンを押して下さい😊\n\n' +
       `【受取日】${formatDateWithWeekday(session.date)}\n` +
       `【受取時間】${session.time}\n` +
       `【ご注文内容】\n${formatOrderLines(items)}\n` +
       `【合計個数】${getCartTotalQty(items)}個\n` +
       `【注文合計】¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}\n` +
+      `【お名前】${session.name}様\n` +
       `【電話番号】${session.phone}`,
     quickReply: {
       items: [
@@ -578,17 +583,22 @@ function buildReservationCompleteMessage(reservation) {
   return {
     type: 'text',
     text:
-      `【${STORE_NAME} ご予約受付完了】\n\n` +
+      `ご注文ありがとうございます✨\n\n` +
       `受付番号：${reservation.reservationNo}\n` +
       `受取日：${formatDateWithWeekday(reservation.date)}\n` +
       `受取時間：${reservation.time}\n` +
       `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
       `合計個数：${reservation.totalQty}個\n` +
       `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-      `お名前：${reservation.name}\n` +
+      `お名前：${reservation.name}様\n` +
       `電話番号：${reservation.phone}\n\n` +
-      `※お支払いは店頭にてお願いいたします。\n` +
-      `※受付番号をご来店時にお伝えください。`
+      `※お受け取り時について\n` +
+      `ご注文内容をお伝えください📕\n` +
+      `※お支払いについて\n` +
+      　`ご来店時にお願いします🙏\n` +
+      `※キャンセルやご変更について\n` +
+      `店舗までご連絡お願いします🙇‍♂️\n` +
+      `☎️048-441-5517` 
   };
 }
 
