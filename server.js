@@ -8,8 +8,13 @@ const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 
+const STORE_NAME = 'かむらど';
+const STORE_CODE = 'KMR';
+const TIME_ZONE = 'Asia/Tokyo';
+const RESERVATION_DEADLINE_HOUR = 22; // 前日22:00締切
+const MAX_ADVANCE_DAYS = 30;
+
 const sessions = new Map();
-const reservations = [];
 
 const MENUS = {
   karaage: { name: 'からあげ弁当', price: 850 },
@@ -101,9 +106,10 @@ async function handleEvent(event) {
         return;
       }
 
-      if (!isTomorrowOrLater(selectedDate)) {
+      if (!isBookablePickupDate(selectedDate)) {
+        const minDate = getMinimumPickupDate();
         await replyMessage(replyToken, [
-          textMessage('受取日は翌日以降で選んでください。'),
+          textMessage(`ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。\n現在選べる最短日は ${minDate} です。`),
           buildDatePickerMessage()
         ]);
         return;
@@ -113,7 +119,7 @@ async function handleEvent(event) {
       session.step = 'waiting_time';
 
       await replyMessage(replyToken, [
-        textMessage(`受取日：${selectedDate}`),
+        textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`),
         buildTimeMessage()
       ]);
       return;
@@ -210,7 +216,7 @@ async function handleEvent(event) {
         name: session.name,
         phone: session.phone,
         status: '受付済み',
-        createdAt: new Date().toISOString()
+        createdAt: getJstDateTimeLabel()
       };
 
       const saveResult = await saveReservationToSheet(reservation);
@@ -223,24 +229,10 @@ async function handleEvent(event) {
         return;
       }
 
-      reservations.push(reservation);
-      console.log('reservation saved:', reservation);
-
       clearSession(userId);
 
       await replyMessage(replyToken, [
-        textMessage(
-          'ご予約ありがとうございます😊\n\n' +
-          `【予約番号】${reservationNo}\n` +
-          `【受取日】${reservation.date}\n` +
-          `【受取時間】${reservation.time}\n` +
-          `【商品】${reservation.menuName}\n` +
-          `【個数】${reservation.qty}個\n` +
-          `【合計】¥${reservation.total}\n` +
-          `【お名前】${reservation.name}\n` +
-          `【電話番号】${reservation.phone}\n` +
-          '【お支払い】店頭にてお願いいたします。'
-        )
+        buildReservationCompleteMessage(reservation)
       ]);
       return;
     }
@@ -249,7 +241,14 @@ async function handleEvent(event) {
   if (event.type === 'message' && event.message?.type === 'text') {
     const text = (event.message.text || '').trim();
 
-    if (['予約', '弁当予約', 'ランチ弁当予約', '予約したい'].includes(text)) {
+    if ([
+      '予約',
+      '弁当予約',
+      'ランチ弁当予約',
+      '予約したい',
+      '予約を始める',
+      'テイクアウト予約'
+    ].includes(text)) {
       clearSession(userId);
       await replyMessage(replyToken, [buildDatePickerMessage()]);
       return;
@@ -299,7 +298,10 @@ async function handleEvent(event) {
 function startGuideMessage() {
   return {
     type: 'text',
-    text: 'ランチ弁当のご予約ですね。下のボタンから始めてください。',
+    text:
+      `${STORE_NAME}のランチ弁当予約です。\n` +
+      `ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。\n` +
+      '下のボタンから始めてください。',
     quickReply: {
       items: [
         {
@@ -317,12 +319,14 @@ function startGuideMessage() {
 }
 
 function buildDatePickerMessage() {
-  const tomorrow = formatDate(addDays(new Date(), 1));
-  const maxDate = formatDate(addDays(new Date(), 30));
+  const minDate = getMinimumPickupDate();
+  const maxDate = addDaysToYmd(minDate, MAX_ADVANCE_DAYS);
 
   return {
     type: 'text',
-    text: '受取日を選んでください。',
+    text:
+      `受取日を選んでください。\n` +
+      `ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。`,
     quickReply: {
       items: [
         {
@@ -332,8 +336,8 @@ function buildDatePickerMessage() {
             label: '日付を選ぶ',
             data: 'action=pick_date',
             mode: 'date',
-            initial: tomorrow,
-            min: tomorrow,
+            initial: minDate,
+            min: minDate,
             max: maxDate
           }
         }
@@ -384,7 +388,12 @@ function buildQtyMessage(menuName) {
         quickPostbackItem('2個', 'action=qty&value=2', '2個'),
         quickPostbackItem('3個', 'action=qty&value=3', '3個'),
         quickPostbackItem('4個', 'action=qty&value=4', '4個'),
-        quickPostbackItem('5個', 'action=qty&value=5', '5個')
+        quickPostbackItem('5個', 'action=qty&value=5', '5個'),
+        quickPostbackItem('6個', 'action=qty&value=6', '6個'),
+        quickPostbackItem('7個', 'action=qty&value=7', '7個'),
+        quickPostbackItem('8個', 'action=qty&value=8', '8個'),
+        quickPostbackItem('9個', 'action=qty&value=9', '9個'),
+        quickPostbackItem('10個', 'action=qty&value=10', '10個')
       ]
     }
   };
@@ -395,11 +404,11 @@ function buildConfirmMessage(session) {
     type: 'text',
     text:
       '以下の内容で予約します。\n\n' +
-      `【受取日】${session.date}\n` +
+      `【受取日】${formatDateWithWeekday(session.date)}\n` +
       `【受取時間】${session.time}\n` +
       `【商品】${session.menuName}\n` +
       `【個数】${session.qty}個\n` +
-      `【合計】¥${session.total}\n` +
+      `【合計】¥${Number(session.total).toLocaleString('ja-JP')}\n` +
       `【お名前】${session.name}\n` +
       `【電話番号】${session.phone}`,
     quickReply: {
@@ -408,6 +417,25 @@ function buildConfirmMessage(session) {
         quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
       ]
     }
+  };
+}
+
+function buildReservationCompleteMessage(reservation) {
+  return {
+    type: 'text',
+    text:
+      `【${STORE_NAME} ご予約受付完了】\n\n` +
+      `受付番号：${reservation.reservationNo}\n` +
+      `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+      `受取時間：${reservation.time}\n` +
+      `商品：${reservation.menuName}\n` +
+      `個数：${reservation.qty}個\n` +
+      `合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation.name}\n` +
+      `電話番号：${reservation.phone}\n\n` +
+      `※お支払いは店頭にてお願いいたします。\n` +
+      `※ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}22:00締切です。\n` +
+      `※受付番号をご来店時にお伝えください。`
   };
 }
 
@@ -538,26 +566,6 @@ function isValidPhone(phone) {
   return /^\d{10,11}$/.test(phone);
 }
 
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function formatDate(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function isTomorrowOrLater(dateStr) {
-  const today = new Date();
-  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-  const selected = new Date(`${dateStr}T00:00:00`);
-  return selected.getTime() >= tomorrow.getTime();
-}
-
 function isReservationComplete(session) {
   return !!(
     session.date &&
@@ -572,15 +580,94 @@ function isReservationComplete(session) {
   );
 }
 
+function getMinimumPickupDate() {
+  const today = getTodayYmdJst();
+  const parts = getJstParts();
+
+  if (parts.hour >= RESERVATION_DEADLINE_HOUR) {
+    return addDaysToYmd(today, 2);
+  }
+
+  return addDaysToYmd(today, 1);
+}
+
+function isBookablePickupDate(dateStr) {
+  return dateStr >= getMinimumPickupDate();
+}
+
 function createReservationNo() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const ss = String(now.getSeconds()).padStart(2, '0');
-  return `LB-${y}${m}${d}-${hh}${mm}${ss}`;
+  const parts = getJstParts();
+  return `${STORE_CODE}-${pad2(parts.month)}${pad2(parts.day)}-${pad2(parts.hour)}${pad2(parts.minute)}${pad2(parts.second)}`;
+}
+
+function getJstDateTimeLabel() {
+  const parts = getJstParts();
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)} ${pad2(parts.hour)}:${pad2(parts.minute)}:${pad2(parts.second)}`;
+}
+
+function getTodayYmdJst() {
+  const parts = getJstParts();
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
+}
+
+function getJstParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const map = {};
+  for (const part of formatter.formatToParts(date)) {
+    if (part.type !== 'literal') {
+      map[part.type] = part.value;
+    }
+  }
+
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    second: Number(map.second)
+  };
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function addDaysToYmd(ymd, days) {
+  const date = utcDateFromYmd(ymd);
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatYmdFromUtcDate(date);
+}
+
+function utcDateFromYmd(ymd) {
+  const [year, month, day] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function formatYmdFromUtcDate(date) {
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+}
+
+function formatDateWithWeekday(dateStr) {
+  return `${dateStr}（${getWeekdayJa(dateStr)}）`;
+}
+
+function getWeekdayJa(dateStr) {
+  const date = utcDateFromYmd(dateStr);
+  return new Intl.DateTimeFormat('ja-JP', {
+    weekday: 'short',
+    timeZone: 'UTC'
+  }).format(date);
 }
 
 function clearSession(userId) {
