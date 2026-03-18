@@ -49,6 +49,7 @@ app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
 
   const events = Array.isArray(body.events) ? body.events : [];
 
+  // Verify時の空イベントにも200を返す
   if (events.length === 0) {
     return res.sendStatus(200);
   }
@@ -111,6 +112,7 @@ async function handleEvent(event) {
 
       session.date = selectedDate;
       session.step = 'waiting_time';
+
       await replyMessage(replyToken, [buildTimeMessage()]);
       return;
     }
@@ -128,6 +130,7 @@ async function handleEvent(event) {
 
       session.time = selectedTime;
       session.step = 'waiting_menu';
+
       await replyMessage(replyToken, [buildMenuMessage()]);
       return;
     }
@@ -252,6 +255,7 @@ async function handleEvent(event) {
     if (session.step === 'waiting_name') {
       session.name = text;
       session.step = 'waiting_phone';
+
       await replyMessage(replyToken, [
         textMessage('電話番号を入力してください。\n例：09012345678')
       ]);
@@ -455,7 +459,22 @@ async function saveReservationToSheet(reservation) {
     const text = await response.text();
     console.log('sheet response:', text);
 
-    return { ok: true, responseText: text };
+    if (!response.ok) {
+      return { ok: false, error: `HTTP ${response.status}: ${text}` };
+    }
+
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      return { ok: false, error: `JSON parse error: ${text}` };
+    }
+
+    if (!json.ok) {
+      return { ok: false, error: json.error || 'Apps Script returned ok:false' };
+    }
+
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
