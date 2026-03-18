@@ -7,6 +7,7 @@ const PORT = process.env.PORT || 10000;
 const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
+const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -14,13 +15,18 @@ const TIME_ZONE = 'Asia/Tokyo';
 const RESERVATION_DEADLINE_HOUR = 22; // 前日22:00締切
 const MAX_ADVANCE_DAYS = 30;
 
+const DEFAULT_DAILY_MENU = {
+  name: '日替わり弁当',
+  price: 800,
+  description: ''
+};
+
 const sessions = new Map();
 
 const MENUS = {
   karaage: { name: 'からあげ弁当', price: 850 },
   shogayaki: { name: '生姜焼き弁当', price: 900 },
-  hamburger: { name: 'ハンバーグ弁当', price: 950 },
-  daily: { name: '日替わり弁当', price: 800 }
+  hamburger: { name: 'ハンバーグ弁当', price: 950 }
 };
 
 const PICKUP_TIMES = [
@@ -73,17 +79,105 @@ async function handleEvent(event) {
   const userId = event.source?.userId;
   const replyToken = event.replyToken;
 
-  if (!userId || !replyToken) return;
+  if (!replyToken) return;
 
-  const session = getSession(userId);
+  const currentSourceId = event.source?.userId || event.source?.groupId || event.source?.roomId || '';
+  const session = userId ? getSession(userId) : null;
 
-  if (event.type === 'follow') {
+  if (event.type === 'follow' && userId) {
     clearSession(userId);
     await replyMessage(replyToken, [startGuideMessage()]);
     return;
   }
 
-  if (event.type === 'postback') {
+  if (event.type === 'message' && event.message?.type === 'text') {
+    const text = (event.message.text || '').trim();
+
+    if (text === '通知先ID') {
+      await replyMessage(replyToken, [
+        textMessage(
+          `現在の通知先IDはこちらです。\n\n` +
+          `${currentSourceId}\n\n` +
+          `このIDを Render の STORE_NOTIFY_LINE_ID に入れてください。`
+        )
+      ]);
+      return;
+    }
+
+    if (!userId) return;
+
+    if ([
+      '予約',
+      '弁当予約',
+      'ランチ弁当予約',
+      '予約したい',
+      '予約を始める',
+      'テイクアウト予約'
+    ].includes(text)) {
+      clearSession(userId);
+      await replyMessage(replyToken, [buildDatePickerMessage()]);
+      return;
+    }
+
+    if (['最初から', 'やり直し', 'リセット'].includes(text)) {
+      clearSession(userId);
+      await replyMessage(replyToken, [buildDatePickerMessage()]);
+      return;
+    }
+
+    if (['注文確認', '注文内容確認', '確認'].includes(text)) {
+      if (!session.items || session.items.length === 0) {
+        await replyMessage(replyToken, [
+          textMessage('まだ商品が入っていません。'),
+          buildMenuMessage(session)
+        ]);
+        return;
+      }
+
+      session.step = 'waiting_name';
+      await replyMessage(replyToken, [
+        buildCartSummaryMessage(session),
+        textMessage('ご予約名を入力してください。')
+      ]);
+      return;
+    }
+
+    if (session.step === 'waiting_name') {
+      session.name = text;
+      session.step = 'waiting_phone';
+
+      await replyMessage(replyToken, [
+        textMessage(`ご予約名：${text}`),
+        textMessage('電話番号を入力してください。\n例：09012345678')
+      ]);
+      return;
+    }
+
+    if (session.step === 'waiting_phone') {
+      const phone = normalizePhone(text);
+
+      if (!isValidPhone(phone)) {
+        await replyMessage(replyToken, [
+          textMessage('電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678')
+        ]);
+        return;
+      }
+
+      session.phone = phone;
+      session.step = 'confirm';
+
+      await replyMessage(replyToken, [
+        textMessage(`電話番号：${phone}`),
+        buildConfirmMessage(session)
+      ]);
+      return;
+    }
+
+    await replyMessage(replyToken, [startGuideMessage()]);
+    return;
+  }
+
+  if (event.type === 'postback' && userId) {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
@@ -113,6 +207,7 @@ async function handleEvent(event) {
       }
 
       session.date = selectedDate;
+      session.dailyMenu = await fetchDailyMenuConfig(selectedDate);
       session.step = 'waiting_time';
 
       await replyMessage(replyToken, [
@@ -145,7 +240,7 @@ async function handleEvent(event) {
 
     if (data.action === 'menu') {
       const item = data.item || '';
-      const menu = MENUS[item];
+      const menu = resolveMenuByKey(session, item);
 
       if (!menu) {
         await replyMessage(replyToken, [
@@ -282,6 +377,10 @@ async function handleEvent(event) {
         return;
       }
 
+      notifyStoreByLine(reservation).catch((err) => {
+        console.error('store line notify error:', err);
+      });
+
       clearSession(userId);
 
       await replyMessage(replyToken, [
@@ -290,88 +389,22 @@ async function handleEvent(event) {
       return;
     }
   }
+}
 
-  if (event.type === 'message' && event.message?.type === 'text') {
-    const text = (event.message.text || '').trim();
-
-    if ([
-      '予約',
-      '弁当予約',
-      'ランチ弁当予約',
-      '予約したい',
-      '予約を始める',
-      'テイクアウト予約'
-    ].includes(text)) {
-      clearSession(userId);
-      await replyMessage(replyToken, [buildDatePickerMessage()]);
-      return;
-    }
-
-    if (['最初から', 'やり直し', 'リセット'].includes(text)) {
-      clearSession(userId);
-      await replyMessage(replyToken, [buildDatePickerMessage()]);
-      return;
-    }
-
-    if (['注文確認', '注文内容確認', '確認'].includes(text)) {
-      if (!session.items || session.items.length === 0) {
-        await replyMessage(replyToken, [
-          textMessage('まだ商品が入っていません。'),
-          buildMenuMessage(session)
-        ]);
-        return;
-      }
-
-      session.step = 'waiting_name';
-      await replyMessage(replyToken, [
-        buildCartSummaryMessage(session),
-        textMessage('ご予約名を入力してください。')
-      ]);
-      return;
-    }
-
-    if (session.step === 'waiting_name') {
-      session.name = text;
-      session.step = 'waiting_phone';
-
-      await replyMessage(replyToken, [
-        textMessage(`ご予約名：${text}`),
-        textMessage('電話番号を入力してください。\n例：09012345678')
-      ]);
-      return;
-    }
-
-    if (session.step === 'waiting_phone') {
-      const phone = normalizePhone(text);
-
-      if (!isValidPhone(phone)) {
-        await replyMessage(replyToken, [
-          textMessage('電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678')
-        ]);
-        return;
-      }
-
-      session.phone = phone;
-      session.step = 'confirm';
-
-      await replyMessage(replyToken, [
-        textMessage(`電話番号：${phone}`),
-        buildConfirmMessage(session)
-      ]);
-      return;
-    }
-
-    await replyMessage(replyToken, [startGuideMessage()]);
+function resolveMenuByKey(session, key) {
+  if (key === 'daily') {
+    return session.dailyMenu || DEFAULT_DAILY_MENU;
   }
+  return MENUS[key] || null;
 }
 
 function startGuideMessage() {
   return {
     type: 'text',
     text:
-      `${STORE_NAME}のランチ弁当予約です🍱\n` +
+      `${STORE_NAME}のランチ弁当予約です。\n` +
       `ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。\n` +
-      '下のボタンから始めてください👇',
+      '下のボタンから始めてください。',
     quickReply: {
       items: [
         {
@@ -429,12 +462,15 @@ function buildTimeMessage() {
 }
 
 function buildMenuMessage(session) {
+  const dailyMenu = session.dailyMenu || DEFAULT_DAILY_MENU;
+
   const menuText =
     'ご希望のお弁当を選んでください🍚🍖\n\n' +
-    '・からあげ弁当 ¥850\n' +
-    '・生姜焼き弁当 ¥900\n' +
-    '・ハンバーグ弁当 ¥950\n' +
-    '・日替わり弁当 ¥800';
+    `・からあげ弁当 ¥${MENUS.karaage.price}\n` +
+    `・生姜焼き弁当 ¥${MENUS.shogayaki.price}\n` +
+    `・ハンバーグ弁当 ¥${MENUS.hamburger.price}\n` +
+    `・${dailyMenu.name} ¥${dailyMenu.price}` +
+    (dailyMenu.description ? `\n  ${dailyMenu.description}` : '');
 
   let cartText = '';
   if (session.items && session.items.length > 0) {
@@ -449,7 +485,7 @@ function buildMenuMessage(session) {
     quickPostbackItem('からあげ弁当', 'action=menu&item=karaage', 'からあげ弁当'),
     quickPostbackItem('生姜焼き弁当', 'action=menu&item=shogayaki', '生姜焼き弁当'),
     quickPostbackItem('ハンバーグ弁当', 'action=menu&item=hamburger', 'ハンバーグ弁当'),
-    quickPostbackItem('日替わり弁当', 'action=menu&item=daily', '日替わり弁当')
+    quickPostbackItem(truncateLabel(dailyMenu.name), 'action=menu&item=daily', dailyMenu.name)
   ];
 
   if (session.items && session.items.length > 0) {
@@ -459,9 +495,7 @@ function buildMenuMessage(session) {
   return {
     type: 'text',
     text: menuText + cartText,
-    quickReply: {
-      items
-    }
+    quickReply: { items }
   };
 }
 
@@ -475,7 +509,12 @@ function buildQtyMessage(menuName) {
         quickPostbackItem('2個', 'action=qty&value=2', '2個'),
         quickPostbackItem('3個', 'action=qty&value=3', '3個'),
         quickPostbackItem('4個', 'action=qty&value=4', '4個'),
-        quickPostbackItem('5個', 'action=qty&value=5', '5個')
+        quickPostbackItem('5個', 'action=qty&value=5', '5個'),
+        quickPostbackItem('6個', 'action=qty&value=6', '6個'),
+        quickPostbackItem('7個', 'action=qty&value=7', '7個'),
+        quickPostbackItem('8個', 'action=qty&value=8', '8個'),
+        quickPostbackItem('9個', 'action=qty&value=9', '9個'),
+        quickPostbackItem('10個', 'action=qty&value=10', '10個')
       ]
     }
   };
@@ -538,14 +577,17 @@ function buildReservationCompleteMessage(reservation) {
       `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
       `合計個数：${reservation.totalQty}個\n` +
       `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-      `お名前：${reservation.name}様\n` +
+      `お名前：${reservation.name}\n` +
       `電話番号：${reservation.phone}\n\n` +
       `※お支払いは店頭にてお願いいたします。\n` +
-      `※ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00締切です。\n` +
-      `※ご来店時にご予約内容をお伝えください。\n` +
-      `※キャンセル等あればお手数ではございますが店舗までご連絡をお願いします🙇‍♂️\n` +
+      `※受付番号をご来店時にお伝えください。\n` +
+      `※キャンセルやご変更は店舗までご連絡ください🙇‍♂️\n` +
       `☎️048-441-5517`
   };
+}
+
+function truncateLabel(text) {
+  return text.length > 20 ? text.slice(0, 20) : text;
 }
 
 function quickPostbackItem(label, data, displayText) {
@@ -561,17 +603,15 @@ function quickPostbackItem(label, data, displayText) {
 }
 
 function textMessage(text) {
-  return {
-    type: 'text',
-    text
-  };
+  return { type: 'text', text };
 }
 
 function getSession(userId) {
   if (!sessions.has(userId)) {
     sessions.set(userId, {
       items: [],
-      currentSelection: null
+      currentSelection: null,
+      dailyMenu: DEFAULT_DAILY_MENU
     });
   }
   return sessions.get(userId);
@@ -580,7 +620,8 @@ function getSession(userId) {
 function clearSession(userId) {
   sessions.set(userId, {
     items: [],
-    currentSelection: null
+    currentSelection: null,
+    dailyMenu: DEFAULT_DAILY_MENU
   });
 }
 
@@ -619,27 +660,48 @@ function getCartTotalAmount(items) {
   return (items || []).reduce((sum, item) => sum + Number(item.total || 0), 0);
 }
 
-async function replyMessage(replyToken, messages) {
-  if (!CHANNEL_ACCESS_TOKEN) {
-    throw new Error('LINE_CHANNEL_ACCESS_TOKEN が未設定です');
+async function fetchDailyMenuConfig(dateStr) {
+  if (!RESERVATION_SAVE_URL) {
+    return DEFAULT_DAILY_MENU;
   }
 
-  const response = await fetch('https://api.line.me/v2/bot/message/reply', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
-    },
-    body: JSON.stringify({
-      replyToken,
-      messages
-    })
-  });
+  try {
+    const url = new URL(RESERVATION_SAVE_URL);
+    url.searchParams.set('action', 'getDailyMenu');
+    url.searchParams.set('date', dateStr);
 
-  const text = await response.text();
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      redirect: 'follow'
+    });
 
-  if (!response.ok) {
-    throw new Error(`Reply API error: ${response.status} ${text}`);
+    const text = await response.text();
+
+    if (!response.ok) {
+      console.error('daily menu http error:', response.status, text);
+      return DEFAULT_DAILY_MENU;
+    }
+
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      console.error('daily menu parse error:', text);
+      return DEFAULT_DAILY_MENU;
+    }
+
+    if (!json.ok || !json.found) {
+      return DEFAULT_DAILY_MENU;
+    }
+
+    return {
+      name: json.menuName || DEFAULT_DAILY_MENU.name,
+      price: Number(json.price || DEFAULT_DAILY_MENU.price),
+      description: json.description || ''
+    };
+  } catch (err) {
+    console.error('fetchDailyMenuConfig error:', err);
+    return DEFAULT_DAILY_MENU;
   }
 }
 
@@ -689,6 +751,65 @@ async function saveReservationToSheet(reservation) {
     return { ok: true };
   } catch (err) {
     return { ok: false, error: String(err) };
+  }
+}
+
+async function notifyStoreByLine(reservation) {
+  if (!STORE_NOTIFY_LINE_ID) return;
+
+  const message = {
+    type: 'text',
+    text:
+      `【店舗通知：新規ランチ予約】\n\n` +
+      `受付番号：${reservation.reservationNo}\n` +
+      `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+      `受取時間：${reservation.time}\n` +
+      `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
+      `合計個数：${reservation.totalQty}個\n` +
+      `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation.name}\n` +
+      `電話番号：${reservation.phone}`
+  };
+
+  const response = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+    },
+    body: JSON.stringify({
+      to: STORE_NOTIFY_LINE_ID,
+      messages: [message]
+    })
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Push API error: ${response.status} ${text}`);
+  }
+}
+
+async function replyMessage(replyToken, messages) {
+  if (!CHANNEL_ACCESS_TOKEN) {
+    throw new Error('LINE_CHANNEL_ACCESS_TOKEN が未設定です');
+  }
+
+  const response = await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages
+    })
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Reply API error: ${response.status} ${text}`);
   }
 }
 
