@@ -218,7 +218,7 @@ async function handleEvent(event) {
       if (!saveResult.ok) {
         console.error('sheet save error:', saveResult.error);
         await replyMessage(replyToken, [
-          textMessage('予約内容の保存でエラーが起きました。もう一度お試しください。')
+          textMessage(`予約内容の保存でエラーが起きました。\n${saveResult.error}`)
         ]);
         return;
       }
@@ -460,12 +460,22 @@ async function saveReservationToSheet(reservation) {
   }
 
   try {
-    const response = await fetch(RESERVATION_SAVE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(reservation),
+    const url = new URL(RESERVATION_SAVE_URL);
+    url.searchParams.set('reservationNo', reservation.reservationNo || '');
+    url.searchParams.set('date', reservation.date || '');
+    url.searchParams.set('time', reservation.time || '');
+    url.searchParams.set('menuName', reservation.menuName || '');
+    url.searchParams.set('qty', String(reservation.qty || ''));
+    url.searchParams.set('price', String(reservation.price || ''));
+    url.searchParams.set('total', String(reservation.total || ''));
+    url.searchParams.set('name', reservation.name || '');
+    url.searchParams.set('phone', reservation.phone || '');
+    url.searchParams.set('userId', reservation.userId || '');
+    url.searchParams.set('status', reservation.status || '');
+    url.searchParams.set('createdAt', reservation.createdAt || '');
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
       redirect: 'follow'
     });
 
