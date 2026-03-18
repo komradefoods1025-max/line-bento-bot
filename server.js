@@ -325,7 +325,7 @@ async function beginReservationFlow(replyToken, userId) {
   session.availableDates = bookingConfig.dates.map((item) => item.date);
 
   await replyMessage(replyToken, [
-    textMessage(`${STORE_NAME}のランチ弁当予約です。\n営業日のみ表示しています。`),
+    textMessage(`${STORE_NAME}のランチ弁当予約です🍱\n営業日のみ表示しています🗓️`),
     buildDateOptionsMessage(bookingConfig.dates)
   ]);
 }
@@ -333,7 +333,7 @@ async function beginReservationFlow(replyToken, userId) {
 function buildDateOptionsMessage(dateOptions) {
   return {
     type: 'text',
-    text: '受取日を選んでください。',
+    text: '受取日を選んでください📅',
     quickReply: {
       items: (dateOptions || []).map((item) => quickPostbackItem(item.label, `action=pick_date&date=${encodeURIComponent(item.date)}`, item.label))
     }
@@ -343,7 +343,7 @@ function buildDateOptionsMessage(dateOptions) {
 function buildTimeMessage() {
   return {
     type: 'text',
-    text: '受取時間を選んでください。',
+    text: '受取時間を選んでください⏰',
     quickReply: {
       items: PICKUP_TIMES.map((time) => quickPostbackItem(time, `action=time&value=${encodeURIComponent(time)}`, time))
     }
@@ -352,7 +352,7 @@ function buildTimeMessage() {
 
 function buildMenuStepMessages(session) {
   const messages = [];
-  let intro = 'ご希望のお弁当をお選びください。';
+  let intro = 'ご希望のお弁当をお選びください🍱';
 
   if (session.dailyMenu?.name) {
     intro += `\n\n★本日の日替わり★\n${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
@@ -428,7 +428,7 @@ function buildMenuBubble(itemKey, menu) {
 function buildQtyMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName} の個数を選んでください。`,
+    text: `${menuName} の個数を選んでください🍱`,
     quickReply: {
       items: [1, 2, 3, 4, 5].map((n) => quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`))
     }
@@ -436,13 +436,13 @@ function buildQtyMessage(menuName) {
 }
 
 function buildCartSummaryMessage(session) {
-  return textMessage(`現在のご注文内容です。\n\n${formatOrderLines(session.items)}\n合計個数：${getCartTotalQty(session.items)}個\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`);
+  return textMessage(`現在のご注文内容です🛍️\n\n${formatOrderLines(session.items)}\n合計個数：${getCartTotalQty(session.items)}個\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`);
 }
 
 function buildCartActionMessage() {
   return {
     type: 'text',
-    text: '続けて商品を追加するか、注文内容を確認してください。',
+    text: '続けて商品を追加するか、注文内容を確認してください🔍',
     quickReply: {
       items: [
         quickPostbackItem('他の商品を追加', 'action=add_more', '他の商品を追加'),
@@ -457,13 +457,13 @@ function buildConfirmMessage(session) {
   return {
     type: 'text',
     text:
-      `以下の内容で予約します。\n\n` +
+      `以下の内容でよろしければ予約確定ボタンを押して下さい😊\n\n` +
       `【受取日】${formatDateWithWeekday(session.date)}\n` +
       `【受取時間】${session.time}\n` +
       `【ご注文内容】\n${formatOrderLines(session.items)}\n` +
       `【合計個数】${getCartTotalQty(session.items)}個\n` +
       `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}\n` +
+      `【お名前】${session.name}様\n` +
       `【電話番号】${session.phone}`,
     quickReply: {
       items: [
@@ -476,15 +476,22 @@ function buildConfirmMessage(session) {
 
 function buildReservationCompleteMessage(reservation) {
   return textMessage(
-    `【${STORE_NAME} ご予約受付完了】\n\n` +
+    `ご注文ありがとうございます✨\n\n` +
     `受付番号：${reservation.reservationNo}\n` +
     `受取日：${formatDateWithWeekday(reservation.date)}\n` +
     `受取時間：${reservation.time}\n` +
     `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
     `合計個数：${reservation.totalQty}個\n` +
     `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-    `お名前：${reservation.name}\n` +
-    `電話番号：${reservation.phone}`
+    `お名前：${reservation.name}様\n` +
+    `電話番号：${reservation.phone}\n\n` +
+    `※お受け取り時について\n` +
+    `ご注文内容をお伝えください📕\n` +
+    `※お支払いについて\n` +
+    `ご来店時にお願いします🙏\n` +
+    `※キャンセルやご変更について\n` +
+    `店舗までご連絡お願いします🙇‍♂️\n` +
+    `☎️048-441-5517` 
   );
 }
 
