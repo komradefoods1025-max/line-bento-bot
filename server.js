@@ -17,13 +17,29 @@ const BOOKABLE_DATE_COUNT = 10;
 const DEFAULT_DAILY_MENU = {
   name: '日替わり弁当',
   price: 800,
-  description: ''
+  description: 'その日のお楽しみメニューです',
+  imageUrl: 'https://example.com/images/daily.jpg'
 };
 
 const MENUS = {
-  karaage: { name: 'からあげ弁当', price: 850 },
-  shogayaki: { name: '生姜焼き弁当', price: 900 },
-  hamburger: { name: 'ハンバーグ弁当', price: 950 }
+  karaage: {
+    name: 'からあげ弁当',
+    price: 850,
+    description: 'ジューシーな唐揚げが人気の定番弁当',
+    imageUrl: 'https://example.com/images/karaage.jpg'
+  },
+  shogayaki: {
+    name: '生姜焼き弁当',
+    price: 900,
+    description: '香ばしく焼き上げたごはんが進む一品',
+    imageUrl: 'https://example.com/images/shogayaki.jpg'
+  },
+  hamburger: {
+    name: 'ハンバーグ弁当',
+    price: 950,
+    description: '肉厚ハンバーグを楽しめる満足弁当',
+    imageUrl: 'https://example.com/images/hamburger.jpg'
+  }
 };
 
 const PICKUP_TIMES = [
@@ -129,7 +145,7 @@ async function handleEvent(event) {
       if (!session.items || session.items.length === 0) {
         await replyMessage(replyToken, [
           textMessage('まだ商品が入っていません。'),
-          buildMenuMessage(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -241,7 +257,7 @@ async function handleEvent(event) {
 
       await replyMessage(replyToken, [
         textMessage(`受取時間：${selectedTime}`),
-        buildMenuMessage(session)
+        ...buildMenuStepMessages(session)
       ]);
       return;
     }
@@ -253,7 +269,7 @@ async function handleEvent(event) {
       if (!menu) {
         await replyMessage(replyToken, [
           textMessage('メニューが見つかりませんでした。もう一度選んでください。'),
-          buildMenuMessage(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -286,7 +302,7 @@ async function handleEvent(event) {
       if (!session.currentSelection) {
         await replyMessage(replyToken, [
           textMessage('先に商品を選んでください。'),
-          buildMenuMessage(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -314,13 +330,13 @@ async function handleEvent(event) {
       if (!session.items || session.items.length === 0) {
         await replyMessage(replyToken, [
           textMessage('まだ商品が入っていません。'),
-          buildMenuMessage(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
 
       session.step = 'waiting_menu';
-      await replyMessage(replyToken, [buildMenuMessage(session)]);
+      await replyMessage(replyToken, buildMenuStepMessages(session));
       return;
     }
 
@@ -328,7 +344,7 @@ async function handleEvent(event) {
       if (!session.items || session.items.length === 0) {
         await replyMessage(replyToken, [
           textMessage('まだ商品が入っていません。'),
-          buildMenuMessage(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -413,9 +429,8 @@ async function beginReservationFlow(replyToken, userId) {
 
   await replyMessage(replyToken, [
     textMessage(
-      `${STORE_NAME}のランチ予約です🍱\n` +
-      `ご予約は前日${pad2(bookingConfig.deadlineHour || 22)}:00までです。\n` +
-      `営業日のみ表示しています📅`
+      `${STORE_NAME}のランチ弁当予約です。\n` +
+      `営業日のみ表示しています。`
     ),
     buildDateOptionsMessage(bookingConfig.dates)
   ]);
@@ -453,7 +468,7 @@ function startGuideMessage() {
 function buildDateOptionsMessage(dateOptions) {
   return {
     type: 'text',
-    text: '受取日を選んでください📅',
+    text: '受取日を選んでください。',
     quickReply: {
       items: dateOptions.map((item) =>
         quickPostbackItem(item.label, `action=pick_date&date=${encodeURIComponent(item.date)}`, item.label)
@@ -465,7 +480,7 @@ function buildDateOptionsMessage(dateOptions) {
 function buildTimeMessage() {
   return {
     type: 'text',
-    text: '受取時間を選んでください⏰',
+    text: '受取時間を選んでください。',
     quickReply: {
       items: PICKUP_TIMES.map((time) =>
         quickPostbackItem(time, `action=time&value=${encodeURIComponent(time)}`, time)
@@ -474,60 +489,145 @@ function buildTimeMessage() {
   };
 }
 
-function buildMenuMessage(session) {
-  const dailyMenu = session.dailyMenu || DEFAULT_DAILY_MENU;
+function buildMenuStepMessages(session) {
+  const messages = [];
 
-  const menuText =
-    'ご希望のお弁当をお選びください🍚🍖\n\n' +
-    `・からあげ弁当 ¥${MENUS.karaage.price}\n` +
-    `・生姜焼き弁当 ¥${MENUS.shogayaki.price}\n` +
-    `・ハンバーグ弁当 ¥${MENUS.hamburger.price}\n` +
-    `・${dailyMenu.name} ¥${dailyMenu.price}` +
-    (dailyMenu.description ? `\n  ${dailyMenu.description}` : '');
+  let introText = 'ご希望のお弁当をお選びください。';
 
-  let cartText = '';
+  if (session.dailyMenu && session.dailyMenu.name) {
+    introText +=
+      `\n\n★本日の日替わり★\n` +
+      `${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
+      (session.dailyMenu.description ? `\n${session.dailyMenu.description}` : '');
+  }
+
   if (session.items && session.items.length > 0) {
-    cartText =
-      '\n\n現在のご注文\n' +
+    introText +=
+      `\n\n現在のご注文\n` +
       formatOrderLines(session.items) +
       `\n合計個数：${getCartTotalQty(session.items)}個` +
       `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
   }
 
-  const items = [
-    quickPostbackItem('からあげ弁当', 'action=menu&item=karaage', 'からあげ弁当'),
-    quickPostbackItem('生姜焼き弁当', 'action=menu&item=shogayaki', '生姜焼き弁当'),
-    quickPostbackItem('ハンバーグ弁当', 'action=menu&item=hamburger', 'ハンバーグ弁当'),
-    quickPostbackItem(truncateLabel(dailyMenu.name), 'action=menu&item=daily', dailyMenu.name)
-  ];
+  messages.push(textMessage(introText));
+  messages.push(buildMenuFlexMessage(session));
 
-  if (session.items && session.items.length > 0) {
-    items.push(quickPostbackItem('注文内容を確認', 'action=review_order', '注文内容を確認'));
-  }
+  return messages;
+}
+
+function buildMenuFlexMessage(session) {
+  const dailyMenu = session.dailyMenu || DEFAULT_DAILY_MENU;
 
   return {
-    type: 'text',
-    text: menuText + cartText,
-    quickReply: { items }
+    type: 'flex',
+    altText: 'お弁当メニュー',
+    contents: {
+      type: 'carousel',
+      contents: [
+        buildMenuBubble({
+          itemKey: 'karaage',
+          title: MENUS.karaage.name,
+          price: MENUS.karaage.price,
+          description: MENUS.karaage.description,
+          imageUrl: MENUS.karaage.imageUrl
+        }),
+        buildMenuBubble({
+          itemKey: 'shogayaki',
+          title: MENUS.shogayaki.name,
+          price: MENUS.shogayaki.price,
+          description: MENUS.shogayaki.description,
+          imageUrl: MENUS.shogayaki.imageUrl
+        }),
+        buildMenuBubble({
+          itemKey: 'hamburger',
+          title: MENUS.hamburger.name,
+          price: MENUS.hamburger.price,
+          description: MENUS.hamburger.description,
+          imageUrl: MENUS.hamburger.imageUrl
+        }),
+        buildMenuBubble({
+          itemKey: 'daily',
+          title: dailyMenu.name,
+          price: dailyMenu.price,
+          description: dailyMenu.description || 'その日のお楽しみメニューです',
+          imageUrl: dailyMenu.imageUrl || DEFAULT_DAILY_MENU.imageUrl
+        })
+      ]
+    }
+  };
+}
+
+function buildMenuBubble({ itemKey, title, price, description, imageUrl }) {
+  return {
+    type: 'bubble',
+    size: 'mega',
+    hero: {
+      type: 'image',
+      url: imageUrl,
+      size: 'full',
+      aspectRatio: '20:13',
+      aspectMode: 'cover'
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      contents: [
+        {
+          type: 'text',
+          text: title,
+          weight: 'bold',
+          size: 'xl',
+          wrap: true
+        },
+        {
+          type: 'text',
+          text: `¥${Number(price).toLocaleString('ja-JP')}`,
+          weight: 'bold',
+          size: 'lg',
+          color: '#16A34A'
+        },
+        {
+          type: 'text',
+          text: description || '',
+          size: 'sm',
+          color: '#666666',
+          wrap: true
+        }
+      ]
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      contents: [
+        {
+          type: 'button',
+          style: 'primary',
+          height: 'sm',
+          action: {
+            type: 'postback',
+            label: 'この商品を選ぶ',
+            data: `action=menu&item=${itemKey}`,
+            displayText: `${title}を選ぶ`
+          }
+        }
+      ]
+    }
   };
 }
 
 function buildQtyMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName} の個数を選んでください🍱`,
+    text: `${menuName} の個数を選んでください。`,
     quickReply: {
       items: [
         quickPostbackItem('1個', 'action=qty&value=1', '1個'),
         quickPostbackItem('2個', 'action=qty&value=2', '2個'),
         quickPostbackItem('3個', 'action=qty&value=3', '3個'),
         quickPostbackItem('4個', 'action=qty&value=4', '4個'),
-        quickPostbackItem('5個', 'action=qty&value=5', '5個'),
-        quickPostbackItem('6個', 'action=qty&value=6', '6個'),
-        quickPostbackItem('7個', 'action=qty&value=7', '7個'),
-        quickPostbackItem('8個', 'action=qty&value=8', '8個'),
-        quickPostbackItem('9個', 'action=qty&value=9', '9個'),
-        quickPostbackItem('10個', 'action=qty&value=10', '10個')
+        quickPostbackItem('5個', 'action=qty&value=5', '5個')
       ]
     }
   };
@@ -536,7 +636,7 @@ function buildQtyMessage(menuName) {
 function buildCartSummaryMessage(session) {
   const items = session.items || [];
   return textMessage(
-    '現在のご注文内容です🛍️\n\n' +
+    '現在のご注文内容です。\n\n' +
     formatOrderLines(items) +
     `\n合計個数：${getCartTotalQty(items)}個` +
     `\n注文合計：¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}`
@@ -546,7 +646,7 @@ function buildCartSummaryMessage(session) {
 function buildCartActionMessage() {
   return {
     type: 'text',
-    text: '続けて商品を追加するか、注文内容を確認してください🔍',
+    text: '続けて商品を追加するか、注文内容を確認してください。',
     quickReply: {
       items: [
         quickPostbackItem('他の商品を追加', 'action=add_more', '他の商品を追加'),
@@ -562,13 +662,13 @@ function buildConfirmMessage(session) {
   return {
     type: 'text',
     text:
-      '以下の内容でよろしければ予約確定ボタンを押して下さい😊\n\n' +
+      '以下の内容で予約します。\n\n' +
       `【受取日】${formatDateWithWeekday(session.date)}\n` +
       `【受取時間】${session.time}\n` +
       `【ご注文内容】\n${formatOrderLines(items)}\n` +
       `【合計個数】${getCartTotalQty(items)}個\n` +
       `【注文合計】¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}様\n` +
+      `【お名前】${session.name}\n` +
       `【電話番号】${session.phone}`,
     quickReply: {
       items: [
@@ -583,27 +683,18 @@ function buildReservationCompleteMessage(reservation) {
   return {
     type: 'text',
     text:
-      `ご注文ありがとうございます✨\n\n` +
+      `【${STORE_NAME} ご予約受付完了】\n\n` +
       `受付番号：${reservation.reservationNo}\n` +
       `受取日：${formatDateWithWeekday(reservation.date)}\n` +
       `受取時間：${reservation.time}\n` +
       `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
       `合計個数：${reservation.totalQty}個\n` +
       `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-      `お名前：${reservation.name}様\n` +
+      `お名前：${reservation.name}\n` +
       `電話番号：${reservation.phone}\n\n` +
-      `※お受け取り時について\n` +
-      `ご注文内容をお伝えください📕\n` +
-      `※お支払いについて\n` +
-      　`ご来店時にお願いします🙏\n` +
-      `※キャンセルやご変更について\n` +
-      `店舗までご連絡お願いします🙇‍♂️\n` +
-      `☎️048-441-5517` 
+      `※お支払いは店頭にてお願いいたします。\n` +
+      `※受付番号をご来店時にお伝えください。`
   };
-}
-
-function truncateLabel(text) {
-  return text.length > 20 ? text.slice(0, 20) : text;
 }
 
 function quickPostbackItem(label, data, displayText) {
@@ -742,7 +833,8 @@ async function fetchDailyMenuConfig(dateStr) {
     return {
       name: json.menuName || DEFAULT_DAILY_MENU.name,
       price: Number(json.price || DEFAULT_DAILY_MENU.price),
-      description: json.description || ''
+      description: json.description || '',
+      imageUrl: DEFAULT_DAILY_MENU.imageUrl
     };
   } catch (_err) {
     return DEFAULT_DAILY_MENU;
