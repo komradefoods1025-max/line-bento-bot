@@ -435,7 +435,7 @@ function buildReservationCompleteMessage(reservation) {
       `電話番号：${reservation.phone}\n\n` +
       `※お支払いは店頭にてお願いいたします。\n` +
       `※ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00締切です。\n` +
-      `※受付番号をご来店時にお伝えください。n` +
+      `※受付番号をご来店時にお伝えください。\n` +
       `※キャンセル等あればお手数ですが店舗までご連絡ください🙇‍♂️`
   };
 }
