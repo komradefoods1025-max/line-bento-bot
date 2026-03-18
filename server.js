@@ -325,8 +325,8 @@ function buildDatePickerMessage() {
   return {
     type: 'text',
     text:
-      `受取日を選んでください。\n` +
-      `ご予約は${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。`,
+      `受取日をお選びください！\n` +
+      `ご予約は${pad2(RESERVATION_DEADLINE_HOUR)}:00までとなります🙇‍♂️`,
     quickReply: {
       items: [
         {
@@ -349,7 +349,7 @@ function buildDatePickerMessage() {
 function buildTimeMessage() {
   return {
     type: 'text',
-    text: '受取時間を選んでください。',
+    text: '受取時間をお選びください！',
     quickReply: {
       items: PICKUP_TIMES.map((time) =>
         quickPostbackItem(time, `action=time&value=${encodeURIComponent(time)}`, time)
@@ -362,7 +362,7 @@ function buildMenuMessage() {
   return {
     type: 'text',
     text:
-      'ご希望のお弁当を選んでください。\n\n' +
+      'ご希望のお弁当をお選びください！\n\n' +
       '・からあげ弁当 ¥850\n' +
       '・生姜焼き弁当 ¥900\n' +
       '・ハンバーグ弁当 ¥950\n' +
@@ -381,7 +381,7 @@ function buildMenuMessage() {
 function buildQtyMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName} の個数を選んでください。`,
+    text: `${menuName} の個数をお選びください！`,
     quickReply: {
       items: [
         quickPostbackItem('1個', 'action=qty&value=1', '1個'),
@@ -403,7 +403,7 @@ function buildConfirmMessage(session) {
   return {
     type: 'text',
     text:
-      '以下の内容で予約します。\n\n' +
+      '以下の内容で予約します😊よろしければ予約確定ボタンを押してください！\n\n' +
       `【受取日】${formatDateWithWeekday(session.date)}\n` +
       `【受取時間】${session.time}\n` +
       `【商品】${session.menuName}\n` +
@@ -424,7 +424,7 @@ function buildReservationCompleteMessage(reservation) {
   return {
     type: 'text',
     text:
-      `【${STORE_NAME} ご予約受付完了】\n\n` +
+      `ご注文ありがとうございます！\n\n` +
       `受付番号：${reservation.reservationNo}\n` +
       `受取日：${formatDateWithWeekday(reservation.date)}\n` +
       `受取時間：${reservation.time}\n` +
@@ -435,7 +435,8 @@ function buildReservationCompleteMessage(reservation) {
       `電話番号：${reservation.phone}\n\n` +
       `※お支払いは店頭にてお願いいたします。\n` +
       `※ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00締切です。\n` +
-      `※受付番号をご来店時にお伝えください。`
+      `※受付番号をご来店時にお伝えください。n` +
+      `※キャンセル等あればお手数ですが店舗までご連絡ください🙇‍♂️`
   };
 }
 
