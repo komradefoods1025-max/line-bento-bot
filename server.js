@@ -413,9 +413,9 @@ async function beginReservationFlow(replyToken, userId) {
 
   await replyMessage(replyToken, [
     textMessage(
-      `${STORE_NAME}のランチ弁当予約です。\n` +
+      `${STORE_NAME}のランチ予約です🍱\n` +
       `ご予約は前日${pad2(bookingConfig.deadlineHour || 22)}:00までです。\n` +
-      `営業日のみ表示しています。`
+      `営業日のみ表示しています📅`
     ),
     buildDateOptionsMessage(bookingConfig.dates)
   ]);
