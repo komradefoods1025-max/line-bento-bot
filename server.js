@@ -12,16 +12,13 @@ const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
 const TIME_ZONE = 'Asia/Tokyo';
-const RESERVATION_DEADLINE_HOUR = 22; // 前日22:00締切
-const MAX_ADVANCE_DAYS = 30;
+const BOOKABLE_DATE_COUNT = 10;
 
 const DEFAULT_DAILY_MENU = {
   name: '日替わり弁当',
   price: 800,
   description: ''
 };
-
-const sessions = new Map();
 
 const MENUS = {
   karaage: { name: 'からあげ弁当', price: 850 },
@@ -33,6 +30,8 @@ const PICKUP_TIMES = [
   '11:30', '11:45', '12:00', '12:15', '12:30',
   '12:45', '13:00', '13:15', '13:30'
 ];
+
+const sessions = new Map();
 
 app.get('/', (_req, res) => {
   res.status(200).send('ok');
@@ -76,12 +75,16 @@ app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
 });
 
 async function handleEvent(event) {
-  const userId = event.source?.userId;
   const replyToken = event.replyToken;
-
   if (!replyToken) return;
 
-  const currentSourceId = event.source?.userId || event.source?.groupId || event.source?.roomId || '';
+  const sourceId =
+    event.source?.userId ||
+    event.source?.groupId ||
+    event.source?.roomId ||
+    '';
+
+  const userId = event.source?.userId || null;
   const session = userId ? getSession(userId) : null;
 
   if (event.type === 'follow' && userId) {
@@ -96,8 +99,7 @@ async function handleEvent(event) {
     if (text === '通知先ID') {
       await replyMessage(replyToken, [
         textMessage(
-          `現在の通知先IDはこちらです。\n\n` +
-          `${currentSourceId}\n\n` +
+          `現在の通知先IDはこちらです。\n\n${sourceId}\n\n` +
           `このIDを Render の STORE_NOTIFY_LINE_ID に入れてください。`
         )
       ]);
@@ -114,14 +116,12 @@ async function handleEvent(event) {
       '予約を始める',
       'テイクアウト予約'
     ].includes(text)) {
-      clearSession(userId);
-      await replyMessage(replyToken, [buildDatePickerMessage()]);
+      await beginReservationFlow(replyToken, userId);
       return;
     }
 
     if (['最初から', 'やり直し', 'リセット'].includes(text)) {
-      clearSession(userId);
-      await replyMessage(replyToken, [buildDatePickerMessage()]);
+      await beginReservationFlow(replyToken, userId);
       return;
     }
 
@@ -181,27 +181,22 @@ async function handleEvent(event) {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
-      clearSession(userId);
-      await replyMessage(replyToken, [buildDatePickerMessage()]);
+      await beginReservationFlow(replyToken, userId);
       return;
     }
 
     if (data.action === 'pick_date') {
-      const selectedDate = event.postback?.params?.date || '';
+      const selectedDate = data.date || '';
 
       if (!selectedDate) {
-        await replyMessage(replyToken, [
-          textMessage('日付を取得できませんでした。もう一度お試しください。'),
-          buildDatePickerMessage()
-        ]);
+        await beginReservationFlow(replyToken, userId);
         return;
       }
 
-      if (!isBookablePickupDate(selectedDate)) {
-        const minDate = getMinimumPickupDate();
+      if (!session.availableDates.includes(selectedDate)) {
         await replyMessage(replyToken, [
-          textMessage(`ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。\n現在選べる最短日は ${formatDateWithWeekday(minDate)} です。`),
-          buildDatePickerMessage()
+          textMessage('その日は受付対象外です。営業日から選び直してください。'),
+          buildDateOptionsMessage(session.availableDateOptions || [])
         ]);
         return;
       }
@@ -210,10 +205,23 @@ async function handleEvent(event) {
       session.dailyMenu = await fetchDailyMenuConfig(selectedDate);
       session.step = 'waiting_time';
 
-      await replyMessage(replyToken, [
-        textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`),
-        buildTimeMessage()
-      ]);
+      const messages = [
+        textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`)
+      ];
+
+      if (session.dailyMenu && session.dailyMenu.name) {
+        messages.push(
+          textMessage(
+            `★この日の日替わり★\n` +
+            `${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
+            (session.dailyMenu.description ? `\n${session.dailyMenu.description}` : '')
+          )
+        );
+      }
+
+      messages.push(buildTimeMessage());
+
+      await replyMessage(replyToken, messages);
       return;
     }
 
@@ -335,11 +343,7 @@ async function handleEvent(event) {
 
     if (data.action === 'confirm') {
       if (!isReservationComplete(session)) {
-        clearSession(userId);
-        await replyMessage(replyToken, [
-          textMessage('予約情報が不足しています。最初からやり直してください。'),
-          startGuideMessage()
-        ]);
+        await beginReservationFlow(replyToken, userId);
         return;
       }
 
@@ -391,6 +395,32 @@ async function handleEvent(event) {
   }
 }
 
+async function beginReservationFlow(replyToken, userId) {
+  clearSession(userId);
+  const session = getSession(userId);
+
+  const bookingConfig = await fetchBookingConfig();
+
+  if (!bookingConfig.ok || !bookingConfig.dates || bookingConfig.dates.length === 0) {
+    await replyMessage(replyToken, [
+      textMessage('現在ご案内できる営業日がありません。時間をおいてお試しください。')
+    ]);
+    return;
+  }
+
+  session.availableDateOptions = bookingConfig.dates;
+  session.availableDates = bookingConfig.dates.map((item) => item.date);
+
+  await replyMessage(replyToken, [
+    textMessage(
+      `${STORE_NAME}のランチ弁当予約です。\n` +
+      `ご予約は前日${pad2(bookingConfig.deadlineHour || 22)}:00までです。\n` +
+      `営業日のみ表示しています。`
+    ),
+    buildDateOptionsMessage(bookingConfig.dates)
+  ]);
+}
+
 function resolveMenuByKey(session, key) {
   if (key === 'daily') {
     return session.dailyMenu || DEFAULT_DAILY_MENU;
@@ -403,7 +433,6 @@ function startGuideMessage() {
     type: 'text',
     text:
       `${STORE_NAME}のランチ弁当予約です。\n` +
-      `ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。\n` +
       '下のボタンから始めてください。',
     quickReply: {
       items: [
@@ -421,30 +450,14 @@ function startGuideMessage() {
   };
 }
 
-function buildDatePickerMessage() {
-  const minDate = getMinimumPickupDate();
-  const maxDate = addDaysToYmd(minDate, MAX_ADVANCE_DAYS);
-
+function buildDateOptionsMessage(dateOptions) {
   return {
     type: 'text',
-    text:
-      `受取日を選んでください📅\n` +
-      `ご予約は前日${pad2(RESERVATION_DEADLINE_HOUR)}:00までです。`,
+    text: '受取日を選んでください。',
     quickReply: {
-      items: [
-        {
-          type: 'action',
-          action: {
-            type: 'datetimepicker',
-            label: '日付を選ぶ',
-            data: 'action=pick_date',
-            mode: 'date',
-            initial: minDate,
-            min: minDate,
-            max: maxDate
-          }
-        }
-      ]
+      items: dateOptions.map((item) =>
+        quickPostbackItem(item.label, `action=pick_date&date=${encodeURIComponent(item.date)}`, item.label)
+      )
     }
   };
 }
@@ -452,7 +465,7 @@ function buildDatePickerMessage() {
 function buildTimeMessage() {
   return {
     type: 'text',
-    text: '受取時間を選んでください⏰',
+    text: '受取時間を選んでください。',
     quickReply: {
       items: PICKUP_TIMES.map((time) =>
         quickPostbackItem(time, `action=time&value=${encodeURIComponent(time)}`, time)
@@ -465,7 +478,7 @@ function buildMenuMessage(session) {
   const dailyMenu = session.dailyMenu || DEFAULT_DAILY_MENU;
 
   const menuText =
-    'ご希望のお弁当を選んでください🍚🍖\n\n' +
+    'ご希望のお弁当を選んでください。\n\n' +
     `・からあげ弁当 ¥${MENUS.karaage.price}\n` +
     `・生姜焼き弁当 ¥${MENUS.shogayaki.price}\n` +
     `・ハンバーグ弁当 ¥${MENUS.hamburger.price}\n` +
@@ -502,19 +515,14 @@ function buildMenuMessage(session) {
 function buildQtyMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName} の個数を選んでください🍱`,
+    text: `${menuName} の個数を選んでください。`,
     quickReply: {
       items: [
         quickPostbackItem('1個', 'action=qty&value=1', '1個'),
         quickPostbackItem('2個', 'action=qty&value=2', '2個'),
         quickPostbackItem('3個', 'action=qty&value=3', '3個'),
         quickPostbackItem('4個', 'action=qty&value=4', '4個'),
-        quickPostbackItem('5個', 'action=qty&value=5', '5個'),
-        quickPostbackItem('6個', 'action=qty&value=6', '6個'),
-        quickPostbackItem('7個', 'action=qty&value=7', '7個'),
-        quickPostbackItem('8個', 'action=qty&value=8', '8個'),
-        quickPostbackItem('9個', 'action=qty&value=9', '9個'),
-        quickPostbackItem('10個', 'action=qty&value=10', '10個')
+        quickPostbackItem('5個', 'action=qty&value=5', '5個')
       ]
     }
   };
@@ -523,7 +531,7 @@ function buildQtyMessage(menuName) {
 function buildCartSummaryMessage(session) {
   const items = session.items || [];
   return textMessage(
-    '現在のご注文内容です🛍️\n\n' +
+    '現在のご注文内容です。\n\n' +
     formatOrderLines(items) +
     `\n合計個数：${getCartTotalQty(items)}個` +
     `\n注文合計：¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}`
@@ -549,13 +557,13 @@ function buildConfirmMessage(session) {
   return {
     type: 'text',
     text:
-      '以下の内容でよろしければ予約確定ボタンを押して下さい😊\n\n' +
+      '以下の内容で予約します。\n\n' +
       `【受取日】${formatDateWithWeekday(session.date)}\n` +
       `【受取時間】${session.time}\n` +
       `【ご注文内容】\n${formatOrderLines(items)}\n` +
       `【合計個数】${getCartTotalQty(items)}個\n` +
       `【注文合計】¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}様\n` +
+      `【お名前】${session.name}\n` +
       `【電話番号】${session.phone}`,
     quickReply: {
       items: [
@@ -570,7 +578,7 @@ function buildReservationCompleteMessage(reservation) {
   return {
     type: 'text',
     text:
-      `ご注文ありがとうございます😊\n\n` +
+      `【${STORE_NAME} ご予約受付完了】\n\n` +
       `受付番号：${reservation.reservationNo}\n` +
       `受取日：${formatDateWithWeekday(reservation.date)}\n` +
       `受取時間：${reservation.time}\n` +
@@ -580,9 +588,7 @@ function buildReservationCompleteMessage(reservation) {
       `お名前：${reservation.name}\n` +
       `電話番号：${reservation.phone}\n\n` +
       `※お支払いは店頭にてお願いいたします。\n` +
-      `※受付番号をご来店時にお伝えください。\n` +
-      `※キャンセルやご変更は店舗までご連絡ください🙇‍♂️\n` +
-      `☎️048-441-5517`
+      `※受付番号をご来店時にお伝えください。`
   };
 }
 
@@ -611,7 +617,9 @@ function getSession(userId) {
     sessions.set(userId, {
       items: [],
       currentSelection: null,
-      dailyMenu: DEFAULT_DAILY_MENU
+      dailyMenu: DEFAULT_DAILY_MENU,
+      availableDates: [],
+      availableDateOptions: []
     });
   }
   return sessions.get(userId);
@@ -621,7 +629,9 @@ function clearSession(userId) {
   sessions.set(userId, {
     items: [],
     currentSelection: null,
-    dailyMenu: DEFAULT_DAILY_MENU
+    dailyMenu: DEFAULT_DAILY_MENU,
+    availableDates: [],
+    availableDateOptions: []
   });
 }
 
@@ -660,6 +670,38 @@ function getCartTotalAmount(items) {
   return (items || []).reduce((sum, item) => sum + Number(item.total || 0), 0);
 }
 
+async function fetchBookingConfig() {
+  if (!RESERVATION_SAVE_URL) {
+    return { ok: false, error: 'RESERVATION_SAVE_URL が未設定です' };
+  }
+
+  try {
+    const url = new URL(RESERVATION_SAVE_URL);
+    url.searchParams.set('action', 'getBookingConfig');
+    url.searchParams.set('count', String(BOOKABLE_DATE_COUNT));
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      redirect: 'follow'
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      return { ok: false, error: `HTTP ${response.status}: ${text}` };
+    }
+
+    const json = JSON.parse(text);
+    if (!json.ok) {
+      return { ok: false, error: json.error || 'booking config error' };
+    }
+
+    return json;
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
 async function fetchDailyMenuConfig(dateStr) {
   if (!RESERVATION_SAVE_URL) {
     return DEFAULT_DAILY_MENU;
@@ -678,17 +720,10 @@ async function fetchDailyMenuConfig(dateStr) {
     const text = await response.text();
 
     if (!response.ok) {
-      console.error('daily menu http error:', response.status, text);
       return DEFAULT_DAILY_MENU;
     }
 
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      console.error('daily menu parse error:', text);
-      return DEFAULT_DAILY_MENU;
-    }
+    const json = JSON.parse(text);
 
     if (!json.ok || !json.found) {
       return DEFAULT_DAILY_MENU;
@@ -699,8 +734,7 @@ async function fetchDailyMenuConfig(dateStr) {
       price: Number(json.price || DEFAULT_DAILY_MENU.price),
       description: json.description || ''
     };
-  } catch (err) {
-    console.error('fetchDailyMenuConfig error:', err);
+  } catch (_err) {
     return DEFAULT_DAILY_MENU;
   }
 }
@@ -731,19 +765,12 @@ async function saveReservationToSheet(reservation) {
     });
 
     const text = await response.text();
-    console.log('sheet response:', text);
 
     if (!response.ok) {
       return { ok: false, error: `HTTP ${response.status}: ${text}` };
     }
 
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      return { ok: false, error: `JSON parse error: ${text}` };
-    }
-
+    const json = JSON.parse(text);
     if (!json.ok) {
       return { ok: false, error: json.error || 'Apps Script returned ok:false' };
     }
@@ -859,21 +886,6 @@ function isReservationComplete(session) {
   );
 }
 
-function getMinimumPickupDate() {
-  const today = getTodayYmdJst();
-  const parts = getJstParts();
-
-  if (parts.hour >= RESERVATION_DEADLINE_HOUR) {
-    return addDaysToYmd(today, 2);
-  }
-
-  return addDaysToYmd(today, 1);
-}
-
-function isBookablePickupDate(dateStr) {
-  return dateStr >= getMinimumPickupDate();
-}
-
 function createReservationNo() {
   const parts = getJstParts();
   return `${STORE_CODE}-${pad2(parts.month)}${pad2(parts.day)}-${pad2(parts.hour)}${pad2(parts.minute)}${pad2(parts.second)}`;
@@ -882,11 +894,6 @@ function createReservationNo() {
 function getJstDateTimeLabel() {
   const parts = getJstParts();
   return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)} ${pad2(parts.hour)}:${pad2(parts.minute)}:${pad2(parts.second)}`;
-}
-
-function getTodayYmdJst() {
-  const parts = getJstParts();
-  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
 }
 
 function getJstParts(date = new Date()) {
@@ -922,21 +929,6 @@ function pad2(value) {
   return String(value).padStart(2, '0');
 }
 
-function addDaysToYmd(ymd, days) {
-  const date = utcDateFromYmd(ymd);
-  date.setUTCDate(date.getUTCDate() + days);
-  return formatYmdFromUtcDate(date);
-}
-
-function utcDateFromYmd(ymd) {
-  const [year, month, day] = ymd.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function formatYmdFromUtcDate(date) {
-  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
-}
-
 function formatDateWithWeekday(dateStr) {
   return `${dateStr}（${getWeekdayJa(dateStr)}）`;
 }
@@ -947,6 +939,17 @@ function getWeekdayJa(dateStr) {
     weekday: 'short',
     timeZone: 'UTC'
   }).format(date);
+}
+
+function utcDateFromYmd(ymd) {
+  const [year, month, day] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addDaysToYmd(ymd, days) {
+  const date = utcDateFromYmd(ymd);
+  date.setUTCDate(date.getUTCDate() + days);
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
 }
 
 app.listen(PORT, '0.0.0.0', () => {
