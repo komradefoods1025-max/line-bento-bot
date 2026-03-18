@@ -12,10 +12,10 @@ const sessions = new Map();
 const reservations = [];
 
 const MENUS = {
-  karaage:   { name: 'からあげ弁当', price: 850 },
+  karaage: { name: 'からあげ弁当', price: 850 },
   shogayaki: { name: '生姜焼き弁当', price: 900 },
   hamburger: { name: 'ハンバーグ弁当', price: 950 },
-  daily:     { name: '日替わり弁当', price: 800 }
+  daily: { name: '日替わり弁当', price: 800 }
 };
 
 const PICKUP_TIMES = [
@@ -49,7 +49,6 @@ app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
 
   const events = Array.isArray(body.events) ? body.events : [];
 
-  // Verify時の空イベントにも200を返す
   if (events.length === 0) {
     return res.sendStatus(200);
   }
@@ -92,53 +91,31 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'pick_date') {
-  const selectedDate = event.postback?.params?.date || '';
+      const selectedDate = event.postback?.params?.date || '';
 
-  if (!selectedDate) {
-    await replyMessage(replyToken, [
-      textMessage('日付を取得できませんでした。もう一度お試しください。'),
-      buildDatePickerMessage()
-    ]);
-    return;
-  }
+      if (!selectedDate) {
+        await replyMessage(replyToken, [
+          textMessage('日付を取得できませんでした。もう一度お試しください。'),
+          buildDatePickerMessage()
+        ]);
+        return;
+      }
 
-  if (!isTomorrowOrLater(selectedDate)) {
-    await replyMessage(replyToken, [
-      textMessage('受取日は翌日以降で選んでください。'),
-      buildDatePickerMessage()
-    ]);
-    return;
-  }
-
-  session.date = selectedDate;
-  session.step = 'waiting_time';
-
-  await replyMessage(replyToken, [
-    textMessage(`受取日：${selectedDate}`),
-    buildTimeMessage()
-  ]);
-  return;
-}
-
-これで、日付を選んだあとにトーク履歴へ
-
-受取日：2026-03-19
-
-みたいにbotからの確認メッセージが残ります。
-見た目としてはかなりわかりやすくなります。
-
-もし 「ユーザーが送ったように見せたい」 なら、datetime picker ではなく
-postback + displayText か message action を使う必要があります。
-ただその場合は、カレンダー型の日時選択ではなくなります。 displayText があるのは postback action 側です。
-
-おすすめは、今のカレンダーはそのまま使って、
-日付選択後に bot が確認文を返す 形です。
-必要なら次に、時間選択も同じように「受取時間：12:00」と履歴表示する版 もまとめる。
+      if (!isTomorrowOrLater(selectedDate)) {
+        await replyMessage(replyToken, [
+          textMessage('受取日は翌日以降で選んでください。'),
+          buildDatePickerMessage()
+        ]);
+        return;
+      }
 
       session.date = selectedDate;
       session.step = 'waiting_time';
 
-      await replyMessage(replyToken, [buildTimeMessage()]);
+      await replyMessage(replyToken, [
+        textMessage(`受取日：${selectedDate}`),
+        buildTimeMessage()
+      ]);
       return;
     }
 
@@ -156,7 +133,10 @@ postback + displayText か message action を使う必要があります。
       session.time = selectedTime;
       session.step = 'waiting_menu';
 
-      await replyMessage(replyToken, [buildMenuMessage()]);
+      await replyMessage(replyToken, [
+        textMessage(`受取時間：${selectedTime}`),
+        buildMenuMessage()
+      ]);
       return;
     }
 
@@ -177,7 +157,10 @@ postback + displayText か message action を使う必要があります。
       session.price = menu.price;
       session.step = 'waiting_qty';
 
-      await replyMessage(replyToken, [buildQtyMessage(menu.name)]);
+      await replyMessage(replyToken, [
+        textMessage(`ご注文商品：${menu.name}`),
+        buildQtyMessage(menu.name)
+      ]);
       return;
     }
 
@@ -197,6 +180,7 @@ postback + displayText か message action を使う必要があります。
       session.step = 'waiting_name';
 
       await replyMessage(replyToken, [
+        textMessage(`個数：${qty}個`),
         textMessage('ご予約名を入力してください。')
       ]);
       return;
@@ -282,6 +266,7 @@ postback + displayText か message action を使う必要があります。
       session.step = 'waiting_phone';
 
       await replyMessage(replyToken, [
+        textMessage(`ご予約名：${text}`),
         textMessage('電話番号を入力してください。\n例：09012345678')
       ]);
       return;
@@ -300,7 +285,10 @@ postback + displayText か message action を使う必要があります。
       session.phone = phone;
       session.step = 'confirm';
 
-      await replyMessage(replyToken, [buildConfirmMessage(session)]);
+      await replyMessage(replyToken, [
+        textMessage(`電話番号：${phone}`),
+        buildConfirmMessage(session)
+      ]);
       return;
     }
 
