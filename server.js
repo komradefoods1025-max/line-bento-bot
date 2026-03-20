@@ -527,7 +527,7 @@ function buildQtyMessage(menuName) {
     type: 'text',
     text: `${menuName} の個数を選んでください🍚🍖`,
     quickReply: {
-      items: [1, 2, 3, 4, 5].map((n) =>
+      items: [1, 2, 3, 4, 5,6,7,8,9,10].map((n) =>
         quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`)
       )
     }
