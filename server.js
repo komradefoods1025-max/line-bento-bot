@@ -18,7 +18,7 @@ const DEFAULT_DAILY_MENU = {
   name: '日替わり弁当',
   price: 800,
   description: 'その日のお楽しみメニューです',
-  imageUrl: 'https://example.com/images/daily.jpg'
+  imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg'
 };
 
 const MENUS = {
@@ -26,19 +26,19 @@ const MENUS = {
     name: 'からあげ弁当',
     price: 850,
     description: 'ジューシーな唐揚げが人気の定番弁当',
-    imageUrl: 'https://example.com/images/karaage.jpg'
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/karaage.jpg'
   },
   shogayaki: {
     name: '生姜焼き弁当',
     price: 900,
     description: '香ばしく焼き上げたごはんが進む一品',
-    imageUrl: 'https://example.com/images/shogayaki.jpg'
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/syougayaki.jpg'
   },
   hamburger: {
     name: 'ハンバーグ弁当',
     price: 950,
     description: '肉厚ハンバーグを楽しめる満足弁当',
-    imageUrl: 'https://example.com/images/hamburger.jpg'
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/hanba-gu.jpg'
   }
 };
 
