@@ -14,13 +14,10 @@ const STORE_CODE = 'KMR';
 const TIME_ZONE = 'Asia/Tokyo';
 const BOOKABLE_DATE_COUNT = 10;
 
-const REMINDER_MINUTES = 5;
-const REMINDER_CHECK_INTERVAL_MS = 60 * 1000;
-
 const DEFAULT_DAILY_MENU = {
   name: '日替わり弁当',
   price: 800,
-  description: 'その日のお楽しみメニューです'
+  description: 'その日のお楽しみメニューです',
   imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg'
 };
 
@@ -28,19 +25,19 @@ const MENUS = {
   karaage: {
     name: 'からあげ弁当',
     price: 850,
-    description: 'ジューシーな唐揚げが人気の定番弁当'
-  imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/karaage.jpg'
+    description: 'ジューシーな唐揚げが人気の定番弁当',
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/karaage.jpg'
   },
   shogayaki: {
     name: '生姜焼き弁当',
     price: 900,
-    description: '香ばしく焼き上げたごはんが進む一品'
+    description: '香ばしく焼き上げたごはんが進む一品',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/syougayaki.jpg'
   },
   hamburger: {
     name: 'ハンバーグ弁当',
     price: 950,
-    description: '肉厚ハンバーグを楽しめる満足弁当'
+    description: '肉厚ハンバーグを楽しめる満足弁当',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/hanba-gu.jpg'
   }
 };
@@ -109,9 +106,12 @@ async function handleEvent(event) {
   }
 
   if (event.type === 'message' && event.message?.type === 'text') {
-    const text = (event.message.text || '').trim();
+    const rawText = event.message.text || '';
+    const text = rawText.trim();
 
-    if (text === '通知先ID') {
+    console.log('incoming text:', rawText);
+
+    if (isNotifyIdText(text)) {
       await replyMessage(replyToken, [
         textMessage(
           `現在の通知先IDはこちらです。\n\n${sourceId}\n\nこのIDを Render の STORE_NOTIFY_LINE_ID に入れてください。`
@@ -120,31 +120,33 @@ async function handleEvent(event) {
       return;
     }
 
-    if (!userId) return;
-
-    if (['予約を続ける', '続ける'].includes(text)) {
-      await resumePendingFlow(replyToken, userId);
+    if (!userId) {
+      await replyMessage(replyToken, [
+        textMessage('予約は bot との1対1トークでご利用ください。')
+      ]);
       return;
     }
 
-    if (['予約', '弁当予約', 'ランチ弁当予約', '予約したい', '予約を始める', 'テイクアウト予約'].includes(text)) {
+    if (isReservationStartText(text)) {
       await beginReservationFlow(replyToken, userId);
       return;
     }
 
-    if (['最初から', 'やり直し', 'リセット'].includes(text)) {
+    if (isResetText(text)) {
       await beginReservationFlow(replyToken, userId);
       return;
     }
 
-    if (['注文確認', '注文内容確認', '確認'].includes(text)) {
+    if (isReviewText(text)) {
       if (!session.items.length) {
-        await replyMessage(replyToken, [textMessage('まだ商品が入っていません。'), ...buildMenuStepMessages(session)]);
+        await replyMessage(replyToken, [
+          textMessage('まだ商品が入っていません。'),
+          ...buildMenuStepMessages(session)
+        ]);
         return;
       }
 
       session.step = 'waiting_name';
-      await syncPendingSession(userId, session);
       await replyMessage(replyToken, [
         buildCartSummaryMessage(session),
         textMessage('ご予約名を入力してください。')
@@ -155,7 +157,6 @@ async function handleEvent(event) {
     if (session.step === 'waiting_name') {
       session.name = text;
       session.step = 'waiting_phone';
-      await syncPendingSession(userId, session);
 
       await replyMessage(replyToken, [
         textMessage(`ご予約名：${text}`),
@@ -176,7 +177,6 @@ async function handleEvent(event) {
 
       session.phone = phone;
       session.step = 'confirm';
-      await syncPendingSession(userId, session);
 
       await replyMessage(replyToken, [
         textMessage(`電話番号：${phone}`),
@@ -197,11 +197,6 @@ async function handleEvent(event) {
       return;
     }
 
-    if (data.action === 'resume_order') {
-      await resumePendingFlow(replyToken, userId);
-      return;
-    }
-
     if (data.action === 'pick_date') {
       const selectedDate = data.date || '';
 
@@ -216,11 +211,8 @@ async function handleEvent(event) {
       session.date = selectedDate;
       session.dailyMenu = await fetchDailyMenuConfig(selectedDate);
       session.step = 'waiting_time';
-      await syncPendingSession(userId, session);
 
-      const messages = [
-        textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`)
-      ];
+      const messages = [textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`)];
 
       if (session.dailyMenu?.name) {
         messages.push(
@@ -249,7 +241,6 @@ async function handleEvent(event) {
 
       session.time = selectedTime;
       session.step = 'waiting_menu';
-      await syncPendingSession(userId, session);
 
       await replyMessage(replyToken, [
         textMessage(`受取時間：${selectedTime}`),
@@ -275,7 +266,6 @@ async function handleEvent(event) {
         price: menu.price
       };
       session.step = 'waiting_qty';
-      await syncPendingSession(userId, session);
 
       await replyMessage(replyToken, [
         textMessage(`ご注文商品：${menu.name}`),
@@ -305,7 +295,6 @@ async function handleEvent(event) {
       const addedName = session.currentSelection.menuName;
       session.currentSelection = null;
       session.step = 'menu_or_review';
-      await syncPendingSession(userId, session);
 
       await replyMessage(replyToken, [
         textMessage(`${addedName} を ${qty}個 追加しました。`),
@@ -317,7 +306,6 @@ async function handleEvent(event) {
 
     if (data.action === 'add_more') {
       session.step = 'waiting_menu';
-      await syncPendingSession(userId, session);
       await replyMessage(replyToken, buildMenuStepMessages(session));
       return;
     }
@@ -332,8 +320,6 @@ async function handleEvent(event) {
       }
 
       session.step = 'waiting_name';
-      await syncPendingSession(userId, session);
-
       await replyMessage(replyToken, [
         buildCartSummaryMessage(session),
         textMessage('ご予約名を入力してください。')
@@ -371,13 +357,16 @@ async function handleEvent(event) {
         return;
       }
 
-      await clearPendingRemote(userId);
-      notifyStoreByLine(reservation).catch((err) => console.error('store line notify error:', err));
+      notifyStoreByLine(reservation).catch((err) =>
+        console.error('store line notify error:', err)
+      );
+
       clearSession(userId);
 
       await replyMessage(replyToken, [
         buildReservationCompleteMessage(reservation)
       ]);
+      return;
     }
   }
 }
@@ -385,7 +374,6 @@ async function handleEvent(event) {
 async function beginReservationFlow(replyToken, userId) {
   clearSession(userId);
   const session = getSession(userId);
-
   const bookingConfig = await fetchBookingConfig();
 
   if (!bookingConfig.ok || !bookingConfig.dates?.length) {
@@ -397,125 +385,24 @@ async function beginReservationFlow(replyToken, userId) {
 
   session.availableDateOptions = bookingConfig.dates;
   session.availableDates = bookingConfig.dates.map((item) => item.date);
-  session.step = 'waiting_date';
-  await syncPendingSession(userId, session);
 
   await replyMessage(replyToken, [
-    textMessage(`${STORE_NAME}のランチ弁当予約です。\n営業日のみ表示しています📆`),
+    textMessage(`${STORE_NAME}のランチ弁当予約です！\n営業日のみ表示しています🗓️`),
     buildDateOptionsMessage(bookingConfig.dates)
   ]);
-}
-
-async function resumePendingFlow(replyToken, userId) {
-  const pending = await fetchPendingSession(userId);
-
-  if (!pending.ok || !pending.found) {
-    await beginReservationFlow(replyToken, userId);
-    return;
-  }
-
-  const session = hydrateSessionFromPending(pending);
-  sessions.set(userId, session);
-
-  if (session.date && (!session.dailyMenu || !session.dailyMenu.name)) {
-    session.dailyMenu = await fetchDailyMenuConfig(session.date);
-  }
-
-  switch (session.step) {
-    case 'waiting_date':
-      await replyMessage(replyToken, [
-        textMessage('途中のご注文を再開します。受取日を選んでください。'),
-        buildDateOptionsMessage(session.availableDateOptions)
-      ]);
-      break;
-
-    case 'waiting_time': {
-      const messages = [
-        textMessage(`途中のご注文を再開します。\n受取日：${formatDateWithWeekday(session.date)}`)
-      ];
-
-      if (session.dailyMenu?.name) {
-        messages.push(
-          textMessage(
-            `★この日の日替わり★\n${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
-            (session.dailyMenu.description ? `\n${session.dailyMenu.description}` : '')
-          )
-        );
-      }
-
-      messages.push(buildTimeMessage());
-      await replyMessage(replyToken, messages);
-      break;
-    }
-
-    case 'waiting_menu':
-    case 'menu_or_review':
-      await replyMessage(replyToken, [
-        textMessage('途中のご注文を再開します。'),
-        ...buildMenuStepMessages(session)
-      ]);
-      break;
-
-    case 'waiting_qty':
-      await replyMessage(replyToken, [
-        textMessage(`途中のご注文を再開します。\nご注文商品：${session.currentSelection?.menuName || 'お弁当'}`),
-        buildQtyMessage(session.currentSelection?.menuName || 'お弁当')
-      ]);
-      break;
-
-    case 'waiting_name':
-      await replyMessage(replyToken, [
-        textMessage('途中のご注文を再開します。'),
-        buildCartSummaryMessage(session),
-        textMessage('ご予約名を入力してください。')
-      ]);
-      break;
-
-    case 'waiting_phone':
-      await replyMessage(replyToken, [
-        textMessage('途中のご注文を再開します。'),
-        textMessage(`ご予約名：${session.name || ''}`),
-        textMessage('電話番号を入力してください。\n例：09012345678')
-      ]);
-      break;
-
-    case 'confirm':
-      await replyMessage(replyToken, [
-        textMessage('途中のご注文を再開します。'),
-        buildConfirmMessage(session)
-      ]);
-      break;
-
-    default:
-      await beginReservationFlow(replyToken, userId);
-      break;
-  }
-
-  await syncPendingSession(userId, session);
-}
-
-function hydrateSessionFromPending(pending) {
-  return {
-    items: safeJsonParse(pending.itemsJson, []),
-    currentSelection: safeJsonParse(pending.currentSelectionJson, null),
-    dailyMenu: safeJsonParse(pending.dailyMenuJson, { ...DEFAULT_DAILY_MENU }),
-    availableDates: safeJsonParse(pending.availableDatesJson, []),
-    availableDateOptions: safeJsonParse(pending.availableDateOptionsJson, []),
-    step: pending.step || 'waiting_date',
-    date: pending.date || '',
-    time: pending.time || '',
-    name: pending.name || '',
-    phone: pending.phone || ''
-  };
 }
 
 function buildDateOptionsMessage(dateOptions) {
   return {
     type: 'text',
-    text: '受取日を選んでください🗓️',
+    text: '受取日を選んでください📆',
     quickReply: {
       items: (dateOptions || []).map((item) =>
-        quickPostbackItem(item.label, `action=pick_date&date=${encodeURIComponent(item.date)}`, item.label)
+        quickPostbackItem(
+          item.label,
+          `action=pick_date&date=${encodeURIComponent(item.date)}`,
+          item.label
+        )
       )
     }
   };
@@ -527,69 +414,118 @@ function buildTimeMessage() {
     text: '受取時間を選んでください⏰',
     quickReply: {
       items: PICKUP_TIMES.map((time) =>
-        quickPostbackItem(time, `action=time&value=${encodeURIComponent(time)}`, time)
+        quickPostbackItem(
+          time,
+          `action=time&value=${encodeURIComponent(time)}`,
+          time
+        )
       )
     }
   };
 }
 
 function buildMenuStepMessages(session) {
+  const messages = [];
   let intro = 'ご希望のお弁当をお選びください🍱';
 
   if (session.dailyMenu?.name) {
     intro +=
-      `\n\n★本日の日替わり★\n` +
-      `${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
+      `\n\n★本日の日替わり★\n${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
       (session.dailyMenu.description ? `\n${session.dailyMenu.description}` : '');
   }
 
   if (session.items.length) {
     intro +=
-      `\n\n現在のご注文\n` +
-      formatOrderLines(session.items) +
+      `\n\n現在のご注文\n${formatOrderLines(session.items)}` +
       `\n合計個数：${getCartTotalQty(session.items)}個` +
       `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
   }
 
-  return [
-    textMessage(intro),
-    buildMenuMessage(session)
-  ];
+  messages.push(textMessage(intro));
+  messages.push(buildMenuFlexMessage(session));
+  return messages;
 }
 
-function buildMenuMessage(session) {
+function buildMenuFlexMessage(session) {
   const dailyMenu = session.dailyMenu || DEFAULT_DAILY_MENU;
 
-  const menuText =
-    'メニューを選んでください🍚🍖\n\n' +
-    `・からあげ弁当 ¥${MENUS.karaage.price}\n` +
-    `・生姜焼き弁当 ¥${MENUS.shogayaki.price}\n` +
-    `・ハンバーグ弁当 ¥${MENUS.hamburger.price}\n` +
-    `・${dailyMenu.name} ¥${dailyMenu.price}` +
-    (dailyMenu.description ? `\n  ${dailyMenu.description}` : '');
-
-  const items = [
-    quickPostbackItem('からあげ弁当', 'action=menu&item=karaage', 'からあげ弁当'),
-    quickPostbackItem('生姜焼き弁当', 'action=menu&item=shogayaki', '生姜焼き弁当'),
-    quickPostbackItem('ハンバーグ弁当', 'action=menu&item=hamburger', 'ハンバーグ弁当'),
-    quickPostbackItem(truncateLabel(dailyMenu.name), 'action=menu&item=daily', dailyMenu.name)
-  ];
-
-  if (session.items.length) {
-    items.push(quickPostbackItem('注文内容を確認', 'action=review_order', '注文内容を確認'));
-  }
-
   return {
-    type: 'text',
-    text: menuText,
-    quickReply: { items }
+    type: 'flex',
+    altText: 'お弁当メニュー',
+    contents: {
+      type: 'carousel',
+      contents: [
+        buildMenuBubble('karaage', MENUS.karaage),
+        buildMenuBubble('shogayaki', MENUS.shogayaki),
+        buildMenuBubble('hamburger', MENUS.hamburger),
+        buildMenuBubble('daily', dailyMenu)
+      ]
+    }
+  };
+}
+
+function buildMenuBubble(itemKey, menu) {
+  return {
+    type: 'bubble',
+    size: 'mega',
+    hero: {
+      type: 'image',
+      url: menu.imageUrl,
+      size: 'full',
+      aspectRatio: '20:13',
+      aspectMode: 'cover'
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      contents: [
+        {
+          type: 'text',
+          text: menu.name,
+          weight: 'bold',
+          size: 'lg',
+          wrap: true
+        },
+        {
+          type: 'text',
+          text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
+          weight: 'bold',
+          size: 'md',
+          color: '#16A34A'
+        },
+        {
+          type: 'text',
+          text: menu.description || '',
+          size: 'sm',
+          color: '#666666',
+          wrap: true
+        }
+      ]
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'button',
+          style: 'primary',
+          action: {
+            type: 'postback',
+            label: 'この商品を選ぶ',
+            data: `action=menu&item=${itemKey}`,
+            displayText: `${menu.name}を選ぶ`
+          }
+        }
+      ]
+    }
   };
 }
 
 function buildQtyMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName} の個数を選んでください。`,
+    text: `${menuName} の個数を選んでください🍚🍖`,
     quickReply: {
       items: [1, 2, 3, 4, 5,6,7,8,9,10].map((n) =>
         quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`)
@@ -600,10 +536,9 @@ function buildQtyMessage(menuName) {
 
 function buildCartSummaryMessage(session) {
   return textMessage(
-    `現在のご注文内容です🛍️\n\n` +
-    `${formatOrderLines(session.items)}\n` +
-    `合計個数：${getCartTotalQty(session.items)}個\n` +
-    `注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`
+    `現在のご注文内容です。\n\n${formatOrderLines(session.items)}` +
+    `\n合計個数：${getCartTotalQty(session.items)}個` +
+    `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`
   );
 }
 
@@ -625,13 +560,13 @@ function buildConfirmMessage(session) {
   return {
     type: 'text',
     text:
-      `以下の内容で予約します。\n\n` +
+      `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください🙇\n\n` +
       `【受取日】${formatDateWithWeekday(session.date)}\n` +
       `【受取時間】${session.time}\n` +
       `【ご注文内容】\n${formatOrderLines(session.items)}\n` +
       `【合計個数】${getCartTotalQty(session.items)}個\n` +
       `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}様\n` +
+      `【お名前】${session.name}\n` +
       `【電話番号】${session.phone}`,
     quickReply: {
       items: [
@@ -644,24 +579,22 @@ function buildConfirmMessage(session) {
 
 function buildReservationCompleteMessage(reservation) {
   return textMessage(
-    `【${STORE_NAME} ご予約受付完了】\n\n` +
+    `ご注文ありがとうございます✨\n\n` +
     `受付番号：${reservation.reservationNo}\n` +
     `受取日：${formatDateWithWeekday(reservation.date)}\n` +
     `受取時間：${reservation.time}\n` +
     `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
     `合計個数：${reservation.totalQty}個\n` +
     `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-    `お名前：${reservation.name}様\n` +
-    `電話番号：${reservation.phone}\n\n` +
-    `※お支払いは店頭にてお願いいたします。\n` +
-    `※受付番号をご来店時にお伝えください。`
+    `お名前：${reservation.name}\n` +
+    `電話番号：${reservation.phone}`
   );
 }
 
 function startGuideMessage() {
   return {
     type: 'text',
-    text: `${STORE_NAME}のランチ弁当予約です。\n下のボタンから始めてください。`,
+    text: `${STORE_NAME}のランチ弁当予約です。\n「予約」と送っていただければ開始できます。`,
     quickReply: {
       items: [
         quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')
@@ -706,11 +639,7 @@ function clearSession(userId) {
     dailyMenu: { ...DEFAULT_DAILY_MENU },
     availableDates: [],
     availableDateOptions: [],
-    step: '',
-    date: '',
-    time: '',
-    name: '',
-    phone: ''
+    step: ''
   });
 }
 
@@ -748,18 +677,6 @@ function getCartTotalAmount(items) {
   return (items || []).reduce((sum, item) => sum + Number(item.total || 0), 0);
 }
 
-function truncateLabel(text) {
-  return String(text || '').length > 20 ? String(text).slice(0, 20) : String(text || '');
-}
-
-function safeJsonParse(text, fallback) {
-  try {
-    return text ? JSON.parse(text) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 async function fetchBookingConfig() {
   try {
     const url = new URL(RESERVATION_SAVE_URL);
@@ -769,10 +686,7 @@ async function fetchBookingConfig() {
     const response = await fetch(url.toString());
     const text = await response.text();
 
-    if (!response.ok) {
-      return { ok: false, error: text };
-    }
-
+    if (!response.ok) return { ok: false, error: text };
     return JSON.parse(text);
   } catch (err) {
     return { ok: false, error: String(err) };
@@ -788,143 +702,47 @@ async function fetchDailyMenuConfig(dateStr) {
     const response = await fetch(url.toString());
     const text = await response.text();
 
-    if (!response.ok) {
-      return DEFAULT_DAILY_MENU;
-    }
+    if (!response.ok) return DEFAULT_DAILY_MENU;
 
     const json = JSON.parse(text);
-
-    if (!json.ok || !json.found) {
-      return DEFAULT_DAILY_MENU;
-    }
+    if (!json.ok || !json.found) return DEFAULT_DAILY_MENU;
 
     return {
       name: json.menuName || DEFAULT_DAILY_MENU.name,
       price: Number(json.price || DEFAULT_DAILY_MENU.price),
-      description: json.description || ''
+      description: json.description || '',
+      imageUrl: DEFAULT_DAILY_MENU.imageUrl
     };
   } catch {
     return DEFAULT_DAILY_MENU;
   }
 }
 
-async function syncPendingSession(userId, session) {
+async function saveReservationToSheet(reservation) {
   try {
     const url = new URL(RESERVATION_SAVE_URL);
-    url.searchParams.set('action', 'savePending');
-    url.searchParams.set('userId', userId);
-    url.searchParams.set('step', session.step || '');
-    url.searchParams.set('date', session.date || '');
-    url.searchParams.set('time', session.time || '');
-    url.searchParams.set('itemsJson', JSON.stringify(session.items || []));
-    url.searchParams.set('currentSelectionJson', JSON.stringify(session.currentSelection || null));
-    url.searchParams.set('name', session.name || '');
-    url.searchParams.set('phone', session.phone || '');
-    url.searchParams.set('availableDatesJson', JSON.stringify(session.availableDates || []));
-    url.searchParams.set('availableDateOptionsJson', JSON.stringify(session.availableDateOptions || []));
-    url.searchParams.set('dailyMenuJson', JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU));
-    url.searchParams.set('lastActionAt', getJstDateTimeLabel());
-    url.searchParams.set('lastActionAtMillis', String(Date.now()));
-
-    await fetch(url.toString());
-  } catch (err) {
-    console.error('syncPendingSession error:', err);
-  }
-}
-
-async function fetchPendingSession(userId) {
-  try {
-    const url = new URL(RESERVATION_SAVE_URL);
-    url.searchParams.set('action', 'getPending');
-    url.searchParams.set('userId', userId);
+    url.searchParams.set('reservationNo', reservation.reservationNo);
+    url.searchParams.set('date', reservation.date);
+    url.searchParams.set('time', reservation.time);
+    url.searchParams.set('name', reservation.name);
+    url.searchParams.set('phone', reservation.phone);
+    url.searchParams.set('userId', reservation.userId);
+    url.searchParams.set('status', reservation.status);
+    url.searchParams.set('createdAt', reservation.createdAt);
+    url.searchParams.set('itemCount', String(reservation.itemCount));
+    url.searchParams.set('totalQty', String(reservation.totalQty));
+    url.searchParams.set('total', String(reservation.total));
+    url.searchParams.set('itemsJson', JSON.stringify(reservation.items));
 
     const response = await fetch(url.toString());
     const text = await response.text();
 
-    if (!response.ok) {
-      return { ok: false, error: text };
-    }
-
-    return JSON.parse(text);
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
-}
-
-async function clearPendingRemote(userId) {
-  try {
-    const url = new URL(RESERVATION_SAVE_URL);
-    url.searchParams.set('action', 'clearPending');
-    url.searchParams.set('userId', userId);
-    await fetch(url.toString());
-  } catch (err) {
-    console.error('clearPendingRemote error:', err);
-  }
-}
-
-async function fetchReminderTargets() {
-  try {
-    const url = new URL(RESERVATION_SAVE_URL);
-    url.searchParams.set('action', 'getReminderTargets');
-    url.searchParams.set('minutes', String(REMINDER_MINUTES));
-
-    const response = await fetch(url.toString());
-    const text = await response.text();
-
-    if (!response.ok) {
-      return [];
-    }
+    if (!response.ok) return { ok: false, error: text };
 
     const json = JSON.parse(text);
-    return json.ok && Array.isArray(json.targets) ? json.targets : [];
+    return json.ok ? { ok: true } : { ok: false, error: json.error || 'save error' };
   } catch (err) {
-    console.error('fetchReminderTargets error:', err);
-    return [];
-  }
-}
-
-async function markReminderSent(userId) {
-  try {
-    const url = new URL(RESERVATION_SAVE_URL);
-    url.searchParams.set('action', 'markReminderSent');
-    url.searchParams.set('userId', userId);
-    await fetch(url.toString());
-  } catch (err) {
-    console.error('markReminderSent error:', err);
-  }
-}
-
-async function pushReminderMessage(target) {
-  const response = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
-    },
-    body: JSON.stringify({
-      to: target.userId,
-      messages: [
-        {
-          type: 'text',
-          text:
-            `ご注文を続けますか？\n\n` +
-            `5分以上操作がなかったため、途中の内容を保存しています。` +
-            (target.stepLabel ? `\n現在の状態：${target.stepLabel}` : '') +
-            `\n\n続ける場合は下のボタンを押してください。`,
-          quickReply: {
-            items: [
-              quickPostbackItem('続きを入力する', 'action=resume_order', '予約を続ける'),
-              quickPostbackItem('最初からやり直す', 'action=reserve_start', '予約')
-            ]
-          }
-        }
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text);
+    return { ok: false, error: String(err) };
   }
 }
 
@@ -961,36 +779,6 @@ async function notifyStoreByLine(reservation) {
   }
 }
 
-async function saveReservationToSheet(reservation) {
-  try {
-    const url = new URL(RESERVATION_SAVE_URL);
-    url.searchParams.set('reservationNo', reservation.reservationNo);
-    url.searchParams.set('date', reservation.date);
-    url.searchParams.set('time', reservation.time);
-    url.searchParams.set('name', reservation.name);
-    url.searchParams.set('phone', reservation.phone);
-    url.searchParams.set('userId', reservation.userId);
-    url.searchParams.set('status', reservation.status);
-    url.searchParams.set('createdAt', reservation.createdAt);
-    url.searchParams.set('itemCount', String(reservation.itemCount));
-    url.searchParams.set('totalQty', String(reservation.totalQty));
-    url.searchParams.set('total', String(reservation.total));
-    url.searchParams.set('itemsJson', JSON.stringify(reservation.items));
-
-    const response = await fetch(url.toString());
-    const text = await response.text();
-
-    if (!response.ok) {
-      return { ok: false, error: text };
-    }
-
-    const json = JSON.parse(text);
-    return json.ok ? { ok: true } : { ok: false, error: json.error || 'save error' };
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
-}
-
 async function replyMessage(replyToken, messages) {
   const response = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -1009,7 +797,12 @@ async function replyMessage(replyToken, messages) {
 
 function verifySignature(rawBody, signature, secret) {
   if (!secret || !signature) return false;
-  const hash = crypto.createHmac('SHA256', secret).update(rawBody).digest('base64');
+
+  const hash = crypto
+    .createHmac('SHA256', secret)
+    .update(rawBody)
+    .digest('base64');
+
   try {
     return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
   } catch {
@@ -1035,7 +828,50 @@ function isValidPhone(phone) {
 }
 
 function isReservationComplete(session) {
-  return !!(session.date && session.time && session.items.length && session.name && session.phone);
+  return !!(
+    session.date &&
+    session.time &&
+    session.items.length &&
+    session.name &&
+    session.phone
+  );
+}
+
+function normalizeIncomingText(text) {
+  return String(text || '')
+    .normalize('NFKC')
+    .replace(/\s+/g, '')
+    .replace(/[！!？?。．、,，]/g, '')
+    .trim();
+}
+
+function isReservationStartText(text) {
+  const t = normalizeIncomingText(text);
+
+  if (!t) return false;
+
+  if (t.includes('予約')) return true;
+
+  return [
+    '弁当',
+    'ランチ',
+    'テイクアウト'
+  ].some((keyword) => t.includes(keyword) && t.includes('したい'));
+}
+
+function isResetText(text) {
+  const t = normalizeIncomingText(text);
+  return ['最初から', 'やり直し', 'リセット'].includes(t);
+}
+
+function isReviewText(text) {
+  const t = normalizeIncomingText(text);
+  return ['注文確認', '注文内容確認', '確認'].includes(t);
+}
+
+function isNotifyIdText(text) {
+  const t = normalizeIncomingText(text);
+  return t === '通知先ID';
 }
 
 function createReservationNo() {
@@ -1062,7 +898,9 @@ function getJstParts(date = new Date()) {
 
   const map = {};
   for (const part of formatter.formatToParts(date)) {
-    if (part.type !== 'literal') map[part.type] = part.value;
+    if (part.type !== 'literal') {
+      map[part.type] = part.value;
+    }
   }
 
   return {
@@ -1096,26 +934,6 @@ function utcDateFromYmd(ymd) {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-function startReminderLoop() {
-  setInterval(async () => {
-    try {
-      const targets = await fetchReminderTargets();
-
-      for (const target of targets) {
-        try {
-          await pushReminderMessage(target);
-          await markReminderSent(target.userId);
-        } catch (err) {
-          console.error(`pushReminderMessage error for ${target.userId}:`, err);
-        }
-      }
-    } catch (err) {
-      console.error('startReminderLoop error:', err);
-    }
-  }, REMINDER_CHECK_INTERVAL_MS);
-}
-
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
-  startReminderLoop();
 });
