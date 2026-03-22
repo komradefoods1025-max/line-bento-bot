@@ -26,7 +26,7 @@ const MENUS = {
     name: 'からあげ弁当',
     price: 850,
     description: 'ジューシーな唐揚げが人気の定番弁当',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/50b6d31f-7ea1-4160-bc9f-138161e3b7e5.jpg'
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_13-12-15.jpg'
   },
   shogayaki: {
     name: '生姜焼き弁当',
