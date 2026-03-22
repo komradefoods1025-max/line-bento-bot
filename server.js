@@ -37,7 +37,7 @@ const MENUS = {
     description: '香ばしく焼き上げたごはんが進む一品',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-13-55.jpg'
   },
-  nanban: {
+  chicken_nanban: {
     name: 'チキン南蛮弁当',
     price: 950,
     description: 'オリジナルタルタルが美味な至極の一品',
@@ -52,7 +52,7 @@ const EXTRA_MENUS = {
     name: '追加唐揚げ',
     price: 30,
     description: 'お弁当に追加できる唐揚げです（1個30円）',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-admin/upload.php#ai-image-editor=185'
+    imageUrl: MENUS.karaage.imageUrl
   }
 };
 
@@ -531,7 +531,7 @@ function buildMenuFlexMessage(session) {
       contents: [
         buildMenuBubble('karaage', MENUS.karaage),
         buildMenuBubble('shogayaki', MENUS.shogayaki),
-        buildMenuBubble('hamburger', MENUS.hamburger),
+        buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
         buildMenuBubble('daily', dailyMenu),
         buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
       ]
@@ -658,14 +658,14 @@ function buildConfirmMessage(session) {
 function buildReservationCompleteMessage(reservation) {
   return textMessage(
     `ご注文ありがとうございます✨\n\n` +
-    `受付番号：${reservation.reservationNo}\n` +
-    `受取日：${formatDateWithWeekday(reservation.date)}\n` +
-    `受取時間：${reservation.time}\n` +
-    `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
-    `合計個数：${reservation.totalQty}個\n` +
-    `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-    `お名前：${reservation.name}\n` +
-    `電話番号：${reservation.phone}`
+      `受付番号：${reservation.reservationNo}\n` +
+      `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+      `受取時間：${reservation.time}\n` +
+      `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
+      `合計個数：${reservation.totalQty}個\n` +
+      `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation.name}\n` +
+      `電話番号：${reservation.phone}`
   );
 }
 
@@ -739,7 +739,7 @@ function buildResumeMessages(session) {
 }
 
 function buildReminderMessages(session) {
-  const head = textMessage(`ご注文を続けますか？\n5分以上操作がなかったため、続きからご案内します。`);
+  const head = textMessage('ご注文を続けますか？\n5分以上操作がなかったため、続きからご案内します。');
 
   switch (session.step) {
     case 'waiting_date':
