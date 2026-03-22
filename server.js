@@ -35,13 +35,13 @@ const MENUS = {
     name: '生姜焼き弁当',
     price: 900,
     description: '香ばしく焼き上げたごはんが進む一品',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/syougayaki.jpg'
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-13-55.jpg'
   },
   hamburger: {
-    name: 'ハンバーグ弁当',
+    name: 'チキン南蛮弁当',
     price: 950,
-    description: '肉厚ハンバーグを楽しめる満足弁当',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/hanba-gu.jpg'
+    description: 'オリジナルタルタルが美味な至極の一品',
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-35-09.jpg'
   }
 };
 
