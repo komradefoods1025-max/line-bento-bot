@@ -37,7 +37,7 @@ const MENUS = {
     description: '香ばしく焼き上げたごはんが進む一品',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-13-55.jpg'
   },
-  hamburger: {
+  nanban: {
     name: 'チキン南蛮弁当',
     price: 950,
     description: 'オリジナルタルタルが美味な至極の一品',
@@ -52,7 +52,7 @@ const EXTRA_MENUS = {
     name: '追加唐揚げ',
     price: 30,
     description: 'お弁当に追加できる唐揚げです（1個30円）',
-    imageUrl: MENUS.karaage.imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-admin/upload.php#ai-image-editor=185
+    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-admin/upload.php#ai-image-editor=185'
   }
 };
 
