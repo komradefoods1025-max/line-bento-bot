@@ -42,6 +42,17 @@ const MENUS = {
   }
 };
 
+const EXTRA_KARAAGE_KEY = 'extra_karaage';
+
+const EXTRA_MENUS = {
+  [EXTRA_KARAAGE_KEY]: {
+    name: '追加唐揚げ',
+    price: 30,
+    description: 'お弁当に追加できる唐揚げです（1個30円）',
+    imageUrl: MENUS.karaage.imageUrl
+  }
+};
+
 const PICKUP_TIMES = [
   '11:30', '11:45', '12:00', '12:15', '12:30',
   '12:45', '13:00', '13:15', '13:30'
@@ -280,7 +291,7 @@ async function handleEvent(event) {
       if (!qty || !session.currentSelection) {
         await replyMessage(replyToken, [
           textMessage('個数をもう一度選んでください。'),
-          buildQtyMessage(session.currentSelection?.menuName || 'お弁当')
+          buildQtyMessage(session.currentSelection?.menuName || '商品')
         ]);
         return;
       }
@@ -426,7 +437,7 @@ function buildTimeMessage() {
 
 function buildMenuStepMessages(session) {
   const messages = [];
-  let intro = 'ご希望のお弁当をお選びください🍱';
+  let intro = 'ご希望の商品をお選びください🍱';
 
   if (session.dailyMenu?.name) {
     intro +=
@@ -458,13 +469,17 @@ function buildMenuFlexMessage(session) {
         buildMenuBubble('karaage', MENUS.karaage),
         buildMenuBubble('shogayaki', MENUS.shogayaki),
         buildMenuBubble('hamburger', MENUS.hamburger),
-        buildMenuBubble('daily', dailyMenu)
+        buildMenuBubble('daily', dailyMenu),
+        buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
       ]
     }
   };
 }
 
 function buildMenuBubble(itemKey, menu) {
+  const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
+  const displayText = itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
+
   return {
     type: 'bubble',
     size: 'mega',
@@ -512,9 +527,9 @@ function buildMenuBubble(itemKey, menu) {
           style: 'primary',
           action: {
             type: 'postback',
-            label: 'この商品を選ぶ',
+            label: buttonLabel,
             data: `action=menu&item=${itemKey}`,
-            displayText: `${menu.name}を選ぶ`
+            displayText
           }
         }
       ]
@@ -527,7 +542,7 @@ function buildQtyMessage(menuName) {
     type: 'text',
     text: `${menuName} の個数を選んでください🍚🍖`,
     quickReply: {
-      items: [1, 2, 3, 4, 5,6,7,8,9,10].map((n) =>
+      items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
         quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`)
       )
     }
@@ -620,9 +635,15 @@ function textMessage(text) {
 }
 
 function resolveMenuByKey(session, key) {
-  return key === 'daily'
-    ? (session.dailyMenu || DEFAULT_DAILY_MENU)
-    : (MENUS[key] || null);
+  if (key === 'daily') {
+    return session.dailyMenu || DEFAULT_DAILY_MENU;
+  }
+
+  if (EXTRA_MENUS[key]) {
+    return EXTRA_MENUS[key];
+  }
+
+  return MENUS[key] || null;
 }
 
 function getSession(userId) {
