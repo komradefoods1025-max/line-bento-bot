@@ -19,7 +19,7 @@ const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
 
 const DEFAULT_DAILY_MENU = {
   name: '日替わり弁当',
-  price: 800,
+  price: 600,
   description: 'その日のお楽しみメニューです',
   imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg'
 };
@@ -27,19 +27,19 @@ const DEFAULT_DAILY_MENU = {
 const MENUS = {
   karaage: {
     name: 'からあげ弁当',
-    price: 850,
+    price: 700,
     description: 'ジューシーな唐揚げが人気の定番弁当',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_13-12-15.jpg'
   },
   shogayaki: {
     name: '生姜焼き弁当',
-    price: 900,
+    price: 700,
     description: '香ばしく焼き上げたごはんが進む一品',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-13-55.jpg'
   },
   chicken_nanban: {
     name: 'チキン南蛮弁当',
-    price: 950,
+    price: 900,
     description: 'オリジナルタルタルが美味な至極の一品',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-35-09.jpg'
   }
@@ -50,8 +50,8 @@ const EXTRA_KARAAGE_KEY = 'extra_karaage';
 const EXTRA_MENUS = {
   [EXTRA_KARAAGE_KEY]: {
     name: '追加唐揚げ',
-    price: 30,
-    description: 'お弁当に追加できる唐揚げです（1個30円）',
+    price: 80,
+    description: 'お弁当に追加できる唐揚げです（1個80円）',
     imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg'
   }
 };
