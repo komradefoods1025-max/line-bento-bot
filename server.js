@@ -52,7 +52,7 @@ const EXTRA_MENUS = {
     name: '追加唐揚げ',
     price: 30,
     description: 'お弁当に追加できる唐揚げです（1個30円）',
-    imageUrl: MENUS.karaage.imageUrl
+    imageUrl: MENUS.karaage.imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-admin/upload.php#ai-image-editor=185
   }
 };
 
