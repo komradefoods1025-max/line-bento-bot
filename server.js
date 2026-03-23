@@ -299,7 +299,7 @@ async function handleEvent(event) {
 
       await replyMessage(replyToken, [
         buildCartSummaryMessage(session),
-        textMessage('ご予約名を入力してください。')
+        buildNameInputMessage()
       ]);
       return;
     }
@@ -311,7 +311,7 @@ async function handleEvent(event) {
 
       await replyMessage(replyToken, [
         textMessage(`ご予約名：${text}`),
-        textMessage('電話番号を入力してください。\n例：09012345678')
+        buildPhoneInputMessage()
       ]);
       return;
     }
@@ -324,7 +324,8 @@ async function handleEvent(event) {
         await replyMessage(replyToken, [
           textMessage(
             '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
-          )
+          ),
+          buildPhoneInputMessage()
         ]);
         return;
       }
@@ -873,9 +874,26 @@ function buildTimeMessage() {
   };
 }
 
+function getVisibleBentoBubbles(session) {
+  const bubbles = [];
+
+  if (session?.dailyMenu?.name) {
+    bubbles.push(buildMenuBubble(DAILY_MENU_KEY, session.dailyMenu));
+  }
+
+  bubbles.push(
+    buildMenuBubble('karaage', MENUS.karaage),
+    buildMenuBubble('shogayaki', MENUS.shogayaki),
+    buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
+    buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
+  );
+
+  return bubbles;
+}
+
 function buildMenuStepMessages(session) {
   const messages = [];
-  let intro = 'ご希望の商品・ドリンクをお選びください🍱🥤';
+  let intro = 'ご希望の商品をお選びください🍱';
 
   if (session.items.length) {
     intro +=
@@ -886,27 +904,16 @@ function buildMenuStepMessages(session) {
 
   messages.push(textMessage(intro));
   messages.push(buildMenuFlexMessage(session));
-  messages.push(buildDrinkFlexMessage());
   return messages;
 }
 
 function buildMenuFlexMessage(session) {
-  const dailyMenu = session?.dailyMenu?.name
-    ? session.dailyMenu
-    : DEFAULT_DAILY_MENU;
-
   return {
     type: 'flex',
     altText: 'お弁当メニュー',
     contents: {
       type: 'carousel',
-      contents: [
-        buildMenuBubble(DAILY_MENU_KEY, dailyMenu),
-        buildMenuBubble('karaage', MENUS.karaage),
-        buildMenuBubble('shogayaki', MENUS.shogayaki),
-        buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
-        buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
-      ]
+      contents: getVisibleBentoBubbles(session)
     }
   };
 }
@@ -1067,6 +1074,61 @@ function buildLargeRiceMessage(menuName) {
   };
 }
 
+
+function buildDrinkConfirmMessage(menuName) {
+  return {
+    type: 'text',
+    text: `${menuName}ですね。
+ドリンクはお付けしますか？`,
+    quickReply: {
+      items: [
+        quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
+        quickPostbackItem('いいえ', 'action=drink_confirm&value=no', 'ドリンクは付けない')
+      ]
+    }
+  };
+}
+
+function buildNameInputMessage() {
+  return {
+    type: 'text',
+    text: 'ご予約名を入力してください。',
+    quickReply: {
+      items: [
+        quickPostbackItem(
+          '名前を入力する',
+          'action=open_name_input',
+          '名前を入力する',
+          {
+            inputOption: 'openKeyboard',
+            fillInText: ''
+          }
+        )
+      ]
+    }
+  };
+}
+
+function buildPhoneInputMessage() {
+  return {
+    type: 'text',
+    text: '電話番号を入力してください。\n例：09012345678',
+    quickReply: {
+      items: [
+        quickPostbackItem(
+          '電話番号を入力する',
+          'action=open_phone_input',
+          '電話番号を入力する',
+          {
+            inputOption: 'openKeyboard',
+            fillInText: ''
+          }
+        )
+      ]
+    }
+  };
+}
+
 function buildQtyMessage(itemName, itemType = 'food') {
   const icon = itemType === 'drink' ? '🥤' : '🍱';
   return {
@@ -1209,7 +1271,7 @@ function buildResumeMessages(session) {
     case 'waiting_phone':
       return [
         textMessage(`ご予約名：${session.name || ''}`),
-        textMessage('電話番号を入力してください。\n例：09012345678')
+        buildPhoneInputMessage()
       ];
 
     case 'confirm':
@@ -1261,7 +1323,7 @@ function buildReminderMessages(session) {
       return [head, buildCartSummaryMessage(session), buildNameInputMessage()];
 
     case 'waiting_phone':
-      return [head, textMessage('電話番号を入力してください。\n例：09012345678')];
+      return [head, buildPhoneInputMessage()];
 
     case 'confirm':
       return [head, buildConfirmMessage(session)];
