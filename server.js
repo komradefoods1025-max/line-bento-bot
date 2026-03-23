@@ -387,6 +387,13 @@ if (session.step === 'waiting_phone') {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
+if (data.action === 'open_name_input') {
+  return;
+}
+
+if (data.action === 'open_phone_input') {
+  return;
+}
       await beginReservationFlow(replyToken, userId);
       return;
     }
@@ -664,24 +671,24 @@ if (session.step === 'waiting_phone') {
     }
 
     if (data.action === 'review_order') {
-      if (!session.items.length) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('まだ商品が入っていません。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+  if (!session.items.length) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('まだ商品が入っていません。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      session.step = 'waiting_name';
-      await savePendingSession(userId, session);
+  session.step = 'waiting_name';
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        buildCartSummaryMessage(session),
-        textMessage('ご予約名を入力してください。')
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    buildCartSummaryMessage(session),
+    buildNameInputMessage()
+  ]);
+  return;
+}
 
     if (data.action === 'confirm') {
       if (!isReservationComplete(session)) {
@@ -1083,7 +1090,45 @@ function buildDrinkBubble(drink) {
   };
 }
 
-function buildLargeRiceMessage(menuName) {
+function buildNameInputMessage() {
+  return {
+    type: 'text',
+    text: 'ご予約名を入力してください。',
+    quickReply: {
+      items: [
+        quickPostbackItem(
+          '名前を入力する',
+          'action=open_name_input',
+          '名前を入力する',
+          {
+            inputOption: 'openKeyboard',
+            fillInText: ''
+          }
+        )
+      ]
+    }
+  };
+}
+
+function buildPhoneInputMessage() {
+  return {
+    type: 'text',
+    text: '電話番号を入力してください。\n例：09012345678',
+    quickReply: {
+      items: [
+        quickPostbackItem(
+          '電話番号を入力する',
+          'action=open_phone_input',
+          '電話番号を入力する',
+          {
+            inputOption: 'openKeyboard',
+            fillInText: ''
+          }
+        )
+      ]
+    }
+  };
+}
   return {
     type: 'text',
     text: `${menuName}ですね。\nご飯の大盛りができますが、いかがですか？`,
@@ -1226,19 +1271,6 @@ function buildResumeMessages(session) {
         buildLargeRiceMessage(session.currentSelection?.menuName || '商品')
       ];
 
-    case 'waiting_drink_confirm':
-      return [
-        textMessage('ご予約の続きをご案内します。'),
-        buildDrinkConfirmMessage(session.currentSelection?.menuName || '商品')
-      ];
-
-    case 'waiting_drink_menu':
-      return [
-        textMessage('ご予約の続きをご案内します。'),
-        textMessage('付けるドリンクを選んでください🥤'),
-        buildDrinkFlexMessage()
-      ];
-
     case 'waiting_qty':
       return [
         textMessage('ご予約の続きをご案内します。'),
@@ -1257,12 +1289,15 @@ function buildResumeMessages(session) {
       ];
 
     case 'waiting_name':
-      return [buildCartSummaryMessage(session), textMessage('ご予約名を入力してください。')];
+      return [
+        buildCartSummaryMessage(session),
+        buildNameInputMessage()
+      ];
 
     case 'waiting_phone':
       return [
         textMessage(`ご予約名：${session.name || ''}`),
-        textMessage('電話番号を入力してください。\n例：09012345678')
+        buildPhoneInputMessage()
       ];
 
     case 'confirm':
@@ -1291,12 +1326,6 @@ function buildReminderMessages(session) {
     case 'waiting_rice_size':
       return [head, buildLargeRiceMessage(session.currentSelection?.menuName || '商品')];
 
-    case 'waiting_drink_confirm':
-      return [head, buildDrinkConfirmMessage(session.currentSelection?.menuName || '商品')];
-
-    case 'waiting_drink_menu':
-      return [head, textMessage('付けるドリンクを選んでください🥤'), buildDrinkFlexMessage()];
-
     case 'waiting_qty':
       return [
         head,
@@ -1311,10 +1340,18 @@ function buildReminderMessages(session) {
       return [head, buildCartSummaryMessage(session), buildCartActionMessage()];
 
     case 'waiting_name':
-      return [head, buildCartSummaryMessage(session), textMessage('ご予約名を入力してください。')];
+      return [
+        head,
+        buildCartSummaryMessage(session),
+        buildNameInputMessage()
+      ];
 
     case 'waiting_phone':
-      return [head, textMessage('電話番号を入力してください。\n例：09012345678')];
+      return [
+        head,
+        textMessage(`ご予約名：${session.name || ''}`),
+        buildPhoneInputMessage()
+      ];
 
     case 'confirm':
       return [head, buildConfirmMessage(session)];
@@ -1324,15 +1361,25 @@ function buildReminderMessages(session) {
   }
 }
 
-function quickPostbackItem(label, data, displayText) {
+function quickPostbackItem(label, data, displayText, options = {}) {
+  const action = {
+    type: 'postback',
+    label,
+    data,
+    displayText
+  };
+
+  if (options.inputOption) {
+    action.inputOption = options.inputOption;
+  }
+
+  if (typeof options.fillInText === 'string') {
+    action.fillInText = options.fillInText;
+  }
+
   return {
     type: 'action',
-    action: {
-      type: 'postback',
-      label,
-      data,
-      displayText
-    }
+    action
   };
 }
 
