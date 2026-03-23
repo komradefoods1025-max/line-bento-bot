@@ -317,29 +317,37 @@ async function handleEvent(event) {
     }
 
     if (session.step === 'waiting_phone') {
-      const phone = normalizePhone(text);
+  const phone = normalizePhone(text);
 
-      if (!isValidPhone(phone)) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage(
-            '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
-          )
-        ]);
-        return;
-      }
+  if (!isValidPhone(phone)) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage(
+        '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
+      )
+    ]);
+    return;
+  }
 
-      session.phone = phone;
-      session.step = 'confirm';
-      await savePendingSession(userId, session);
+  session.phone = phone;
+  session.step = 'confirm';
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        textMessage(`電話番号：${phone}`),
-        buildConfirmMessage(session)
-      ]);
-      return;
-    }
+  console.log(`[PHONE ACCEPTED ${APP_VERSION}]`, {
+    name: session.name,
+    phone: session.phone,
+    itemCount: Array.isArray(session.items) ? session.items.length : 0,
+    step: session.step
+  });
 
+  const confirmMessage = buildConfirmMessage(session);
+
+  await replyMessage(replyToken, [
+    textMessage(`電話番号：${phone}`),
+    confirmMessage
+  ]);
+  return;
+}
     if (hasActiveSession(session)) {
       await savePendingSession(userId, session);
       await replyMessage(replyToken, buildResumeMessages(session));
