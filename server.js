@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
-const LIFF_ID = process.env.LIFF_ID || '';
+
 const app = express();
 
 const PORT = process.env.PORT || 10000;
@@ -9,6 +9,7 @@ const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
+const LIFF_ID = process.env.LIFF_ID || '';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -63,6 +64,16 @@ const PICKUP_TIMES = [
 ];
 
 const sessions = new Map();
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/liff-config', (_req, res) => {
+  res.json({
+    liffId: LIFF_ID,
+    bookableDateCount: BOOKABLE_DATE_COUNT,
+    storeName: STORE_NAME
+  });
+});
 
 app.get('/', (_req, res) => {
   res.status(200).send('ok');
@@ -182,6 +193,11 @@ async function handleEvent(event) {
       return;
     }
 
+    if (session.step === 'waiting_date' && isYmdDate(text)) {
+      await handleSelectedDate(replyToken, userId, session, text);
+      return;
+    }
+
     if (isReviewText(text)) {
       if (!session.items.length) {
         await savePendingSession(userId, session);
@@ -256,25 +272,7 @@ async function handleEvent(event) {
 
     if (data.action === 'pick_date') {
       const selectedDate = event.postback?.params?.date || '';
-
-      if (!selectedDate || !session.availableDates.includes(selectedDate)) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('その日は受付対象外です。営業日から選び直してください。'),
-          buildDatePickerMessage(session.availableDates)
-        ]);
-        return;
-      }
-
-      session.date = selectedDate;
-      session.dailyMenu = await fetchDailyMenuConfig(selectedDate);
-      session.step = 'waiting_time';
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`),
-        buildTimeMessage()
-      ]);
+      await handleSelectedDate(replyToken, userId, session, selectedDate);
       return;
     }
 
@@ -454,7 +452,7 @@ async function beginReservationFlow(replyToken, userId) {
 
   await replyMessage(replyToken, [
     textMessage(`${STORE_NAME}のランチ弁当予約です！\nカレンダーから受取日を選んでください🗓️`),
-    buildDatePickerMessage(session.availableDates)
+    createDateSelectMessage()
   ]);
 }
 
@@ -489,6 +487,58 @@ function buildDatePickerMessage(availableDates) {
       ]
     }
   };
+}
+
+function createDateSelectMessage() {
+  if (!LIFF_ID) {
+    return textMessage(
+      '受取希望日を YYYY-MM-DD 形式で送ってください。\n例：2026-03-24'
+    );
+  }
+
+  return {
+    type: 'text',
+    text: '受取希望日をカレンダーから選んでください👇',
+    quickReply: {
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'uri',
+            label: 'カレンダーを開く',
+            uri: `https://liff.line.me/${LIFF_ID}`
+          }
+        }
+      ]
+    }
+  };
+}
+
+function isYmdDate(text) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(text || '').trim());
+}
+
+async function handleSelectedDate(replyToken, userId, session, selectedDate) {
+  const availableDates = Array.isArray(session.availableDates) ? session.availableDates : [];
+
+  if (!selectedDate || !availableDates.includes(selectedDate)) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('その日は受付対象外です。営業日から選び直してください。'),
+      createDateSelectMessage()
+    ]);
+    return;
+  }
+
+  session.date = selectedDate;
+  session.dailyMenu = await fetchDailyMenuConfig(selectedDate);
+  session.step = 'waiting_time';
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`),
+    buildTimeMessage()
+  ]);
 }
 
 function buildTimeMessage() {
@@ -686,7 +736,7 @@ function buildResumeMessages(session) {
     case 'waiting_date':
       return [
         textMessage('ご予約の続きから再開できます。'),
-        buildDatePickerMessage(session.availableDates || [])
+        createDateSelectMessage()
       ];
 
     case 'waiting_time':
@@ -741,7 +791,7 @@ function buildReminderMessages(session) {
 
   switch (session.step) {
     case 'waiting_date':
-      return [head, buildDatePickerMessage(session.availableDates || [])];
+      return [head, createDateSelectMessage()];
 
     case 'waiting_time':
       return [head, buildTimeMessage()];
@@ -1177,7 +1227,7 @@ async function notifyStoreByLine(reservation) {
           `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
           `合計個数：${reservation.totalQty}個\n` +
           `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-          `お名前：${reservation.name}\n` +
+          `お名前：${reservation.name}様\n` +
           `電話番号：${reservation.phone}`
         )
       ]
@@ -1386,17 +1436,5 @@ function utcDateFromYmd(ymd) {
 }
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/api/liff-config', (req, res) => {
-  res.json({
-    liffId: LIFF_ID,
-    bookableDateCount: BOOKABLE_DATE_COUNT,
-    storeName: STORE_NAME
-  });
-});
-app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
