@@ -1777,7 +1777,7 @@ async function notifyStoreByLine(reservation) {
             `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
             `合計個数：${reservation.totalQty}個\n` +
             `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-            `お名前：${reservation.name}様\n` +
+            `お名前：${reservation.name}\n` +
             `電話番号：${reservation.phone}`
         )
       ]
