@@ -285,94 +285,61 @@ async function handleEvent(event) {
     }
 
     if (isReviewText(text)) {
-  if (!session.items.length) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('まだ商品が入っていません。'),
-      ...buildMenuStepMessages(session)
-    ]);
-    return;
-  }
+      if (!session.items.length) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('まだ商品が入っていません。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
 
-  session.step = 'waiting_name';
-  await savePendingSession(userId, session);
+      session.step = 'waiting_name';
+      await savePendingSession(userId, session);
 
-  await replyMessage(replyToken, [
-    buildCartSummaryMessage(session),
-    buildNameInputMessage()
-  ]);
-  return;
-}
+      await replyMessage(replyToken, [
+        buildCartSummaryMessage(session),
+        textMessage('ご予約名を入力してください。')
+      ]);
+      return;
+    }
 
-if (session.step === 'waiting_name') {
-  session.name = text;
-  session.step = 'waiting_phone';
-  await savePendingSession(userId, session);
+    if (session.step === 'waiting_name') {
+      session.name = text;
+      session.step = 'waiting_phone';
+      await savePendingSession(userId, session);
 
-  await replyMessage(replyToken, [
-    textMessage(`ご予約名：${text}`),
-    buildPhoneInputMessage()
-  ]);
-  return;
-}
-
-if (session.step === 'waiting_phone') {
-  const phone = normalizePhone(text);
-
-  if (!isValidPhone(phone)) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage(
-        '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
-      ),
-      buildPhoneInputMessage()
-    ]);
-    return;
-  }
-
-  session.phone = phone;
-  session.step = 'confirm';
-  await savePendingSession(userId, session);
-
-  await replyMessage(replyToken, [
-    textMessage(`電話番号：${phone}`),
-    buildConfirmMessage(session)
-  ]);
-  return;
-}
+      await replyMessage(replyToken, [
+        textMessage(`ご予約名：${text}`),
+        textMessage('電話番号を入力してください。\n例：09012345678')
+      ]);
+      return;
+    }
 
     if (session.step === 'waiting_phone') {
-  const phone = normalizePhone(text);
+      const phone = normalizePhone(text);
 
-  if (!isValidPhone(phone)) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage(
-        '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
-      )
-    ]);
-    return;
-  }
+      if (!isValidPhone(phone)) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(
+            '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
+          )
+        ]);
+        return;
+      }
 
-  session.phone = phone;
-  session.step = 'confirm';
-  await savePendingSession(userId, session);
+      session.phone = phone;
+      session.step = 'confirm';
+      await savePendingSession(userId, session);
 
-  console.log(`[PHONE ACCEPTED ${APP_VERSION}]`, {
-    name: session.name,
-    phone: session.phone,
-    itemCount: Array.isArray(session.items) ? session.items.length : 0,
-    step: session.step
-  });
+      await replyMessage(replyToken, [
+        textMessage(`電話番号：${phone}`),
+        buildConfirmMessage(session)
+      ]);
+      return;
+    }
 
-  const confirmMessage = buildConfirmMessage(session);
-
-  await replyMessage(replyToken, [
-    textMessage(`電話番号：${phone}`),
-    confirmMessage
-  ]);
-  return;
-}
     if (hasActiveSession(session)) {
       await savePendingSession(userId, session);
       await replyMessage(replyToken, buildResumeMessages(session));
@@ -387,14 +354,15 @@ if (session.step === 'waiting_phone') {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
-if (data.action === 'open_name_input') {
-  return;
-}
-
-if (data.action === 'open_phone_input') {
-  return;
-}
       await beginReservationFlow(replyToken, userId);
+      return;
+    }
+
+    if (data.action === 'open_name_input') {
+      return;
+    }
+
+    if (data.action === 'open_phone_input') {
       return;
     }
 
@@ -671,24 +639,24 @@ if (data.action === 'open_phone_input') {
     }
 
     if (data.action === 'review_order') {
-  if (!session.items.length) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('まだ商品が入っていません。'),
-      ...buildMenuStepMessages(session)
-    ]);
-    return;
-  }
+      if (!session.items.length) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('まだ商品が入っていません。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
 
-  session.step = 'waiting_name';
-  await savePendingSession(userId, session);
+      session.step = 'waiting_name';
+      await savePendingSession(userId, session);
 
-  await replyMessage(replyToken, [
-    buildCartSummaryMessage(session),
-    buildNameInputMessage()
-  ]);
-  return;
-}
+      await replyMessage(replyToken, [
+        buildCartSummaryMessage(session),
+        buildNameInputMessage()
+      ]);
+      return;
+    }
 
     if (data.action === 'confirm') {
       if (!isReservationComplete(session)) {
@@ -904,47 +872,43 @@ function buildTimeMessage() {
     }
   };
 }
-function getVisibleBentoBubbles(session) {
-  const bubbles = [];
 
-  if (session?.dailyMenu?.name) {
-    bubbles.push(buildMenuBubble(DAILY_MENU_KEY, session.dailyMenu));
+function buildMenuStepMessages(session) {
+  const messages = [];
+  let intro = 'ご希望の商品・ドリンクをお選びください🍱🥤';
+
+  if (session.items.length) {
+    intro +=
+      `\n\n現在のご注文\n${formatOrderLines(session.items)}` +
+      `\n合計個数：${getCartTotalQty(session.items)}個` +
+      `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
   }
 
-  bubbles.push(
-    buildMenuBubble('karaage', MENUS.karaage),
-    buildMenuBubble('shogayaki', MENUS.shogayaki),
-    buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
-    buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
-  );
-
-  return bubbles;
-}
-function buildMenuStepMessages(session) {
-const messages = [];
-let intro = 'ご希望の商品をお選びください🍱';
-
-if (session.items.length) {
-intro +=
-`\n\n現在のご注文\n${formatOrderLines(session.items)}` +
-`\n合計個数：${getCartTotalQty(session.items)}個` +
-`\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
-}
-
-messages.push(textMessage(intro));
-messages.push(buildMenuFlexMessage(session));
-return messages;
+  messages.push(textMessage(intro));
+  messages.push(buildMenuFlexMessage(session));
+  messages.push(buildDrinkFlexMessage());
+  return messages;
 }
 
 function buildMenuFlexMessage(session) {
-return {
-type: 'flex',
-altText: 'お弁当メニュー',
-contents: {
-type: 'carousel',
-contents: getVisibleBentoBubbles(session)
-}
-};
+  const dailyMenu = session?.dailyMenu?.name
+    ? session.dailyMenu
+    : DEFAULT_DAILY_MENU;
+
+  return {
+    type: 'flex',
+    altText: 'お弁当メニュー',
+    contents: {
+      type: 'carousel',
+      contents: [
+        buildMenuBubble(DAILY_MENU_KEY, dailyMenu),
+        buildMenuBubble('karaage', MENUS.karaage),
+        buildMenuBubble('shogayaki', MENUS.shogayaki),
+        buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
+        buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
+      ]
+    }
+  };
 }
 
 function buildDrinkFlexMessage() {
@@ -959,77 +923,77 @@ function buildDrinkFlexMessage() {
 }
 
 function buildMenuBubble(itemKey, menu) {
-const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
-const displayText =
-itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
+  const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
+  const displayText =
+    itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
 
-const bodyContents = [
-{
-type: 'text',
-text: menu.name,
-weight: 'bold',
-size: 'lg',
-wrap: true
-},
-{
-type: 'text',
-text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
-weight: 'bold',
-size: 'md',
-color: '#16A34A'
-},
-{
-type: 'text',
-text: menu.description || '',
-size: 'sm',
-color: '#666666',
-wrap: true
-}
-];
+  const bodyContents = [
+    {
+      type: 'text',
+      text: menu.name,
+      weight: 'bold',
+      size: 'lg',
+      wrap: true
+    },
+    {
+      type: 'text',
+      text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
+      weight: 'bold',
+      size: 'md',
+      color: '#16A34A'
+    },
+    {
+      type: 'text',
+      text: menu.description || '',
+      size: 'sm',
+      color: '#666666',
+      wrap: true
+    }
+  ];
 
-if (menu.allowLargeRice) {
-bodyContents.push({
-type: 'text',
-text: 'ご飯大盛り対応',
-size: 'xs',
-color: '#B45309',
-wrap: true
-});
-}
+  if (menu.allowLargeRice) {
+    bodyContents.push({
+      type: 'text',
+      text: 'ご飯大盛り対応',
+      size: 'xs',
+      color: '#B45309',
+      wrap: true
+    });
+  }
 
-return {
-type: 'bubble',
-size: 'mega',
-hero: {
-type: 'image',
-url: menu.imageUrl,
-size: 'full',
-aspectRatio: '20:13',
-aspectMode: 'cover'
-},
-body: {
-type: 'box',
-layout: 'vertical',
-spacing: 'sm',
-contents: bodyContents
-},
-footer: {
-type: 'box',
-layout: 'vertical',
-contents: [
-{
-type: 'button',
-style: 'primary',
-action: {
-type: 'postback',
-label: buttonLabel,
-data: `action=menu&item=${itemKey}`,
-displayText
-}
-}
-]
-}
-};
+  return {
+    type: 'bubble',
+    size: 'mega',
+    hero: {
+      type: 'image',
+      url: menu.imageUrl,
+      size: 'full',
+      aspectRatio: '20:13',
+      aspectMode: 'cover'
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      contents: bodyContents
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'button',
+          style: 'primary',
+          action: {
+            type: 'postback',
+            label: buttonLabel,
+            data: `action=menu&item=${itemKey}`,
+            displayText
+          }
+        }
+      ]
+    }
+  };
 }
 
 function buildDrinkBubble(drink) {
@@ -1090,45 +1054,7 @@ function buildDrinkBubble(drink) {
   };
 }
 
-function buildNameInputMessage() {
-  return {
-    type: 'text',
-    text: 'ご予約名を入力してください。',
-    quickReply: {
-      items: [
-        quickPostbackItem(
-          '名前を入力する',
-          'action=open_name_input',
-          '名前を入力する',
-          {
-            inputOption: 'openKeyboard',
-            fillInText: ''
-          }
-        )
-      ]
-    }
-  };
-}
-
-function buildPhoneInputMessage() {
-  return {
-    type: 'text',
-    text: '電話番号を入力してください。\n例：09012345678',
-    quickReply: {
-      items: [
-        quickPostbackItem(
-          '電話番号を入力する',
-          'action=open_phone_input',
-          '電話番号を入力する',
-          {
-            inputOption: 'openKeyboard',
-            fillInText: ''
-          }
-        )
-      ]
-    }
-  };
-}
+function buildLargeRiceMessage(menuName) {
   return {
     type: 'text',
     text: `${menuName}ですね。\nご飯の大盛りができますが、いかがですか？`,
@@ -1136,19 +1062,6 @@ function buildPhoneInputMessage() {
       items: [
         quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
         quickPostbackItem('いいえ', 'action=rice_size&value=no', 'ご飯は普通にする')
-      ]
-    }
-  };
-}
-
-function buildDrinkConfirmMessage(menuName) {
-  return {
-    type: 'text',
-    text: `${menuName}ですね。\nドリンクはお付けしますか？`,
-    quickReply: {
-      items: [
-        quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
-        quickPostbackItem('いいえ', 'action=drink_confirm&value=no', 'ドリンクは付けない')
       ]
     }
   };
@@ -1190,28 +1103,17 @@ function buildCartActionMessage() {
 }
 
 function buildConfirmMessage(session) {
-  const safeDate = session?.date ? formatDateWithWeekday(session.date) : '未設定';
-  const safeTime = session?.time || '未設定';
-  const safeItems = Array.isArray(session?.items) ? session.items : [];
-  const safeOrderLines = safeItems.length
-    ? formatOrderLines(safeItems)
-    : '・商品が入っていません';
-  const safeTotalQty = safeItems.length ? getCartTotalQty(safeItems) : 0;
-  const safeTotalAmount = safeItems.length ? getCartTotalAmount(safeItems) : 0;
-  const safeName = session?.name || '';
-  const safePhone = session?.phone || '';
-
   return {
     type: 'text',
     text:
       `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください🙇\n\n` +
-      `【受取日】${safeDate}\n` +
-      `【受取時間】${safeTime}\n` +
-      `【ご注文内容】\n${safeOrderLines}\n` +
-      `【合計個数】${safeTotalQty}個\n` +
-      `【注文合計】¥${Number(safeTotalAmount).toLocaleString('ja-JP')}\n` +
-      `【お名前】${safeName}様\n` +
-      `【電話番号】${safePhone}`,
+      `【受取日】${formatDateWithWeekday(session.date)}\n` +
+      `【受取時間】${session.time}\n` +
+      `【ご注文内容】\n${formatOrderLines(session.items)}\n` +
+      `【合計個数】${getCartTotalQty(session.items)}個\n` +
+      `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}\n` +
+      `【お名前】${session.name}様\n` +
+      `【電話番号】${session.phone}`,
     quickReply: {
       items: [
         quickPostbackItem('予約確定', 'action=confirm', '予約確定'),
@@ -1271,6 +1173,19 @@ function buildResumeMessages(session) {
         buildLargeRiceMessage(session.currentSelection?.menuName || '商品')
       ];
 
+    case 'waiting_drink_confirm':
+      return [
+        textMessage('ご予約の続きをご案内します。'),
+        buildDrinkConfirmMessage(session.currentSelection?.menuName || '商品')
+      ];
+
+    case 'waiting_drink_menu':
+      return [
+        textMessage('ご予約の続きをご案内します。'),
+        textMessage('付けるドリンクを選んでください🥤'),
+        buildDrinkFlexMessage()
+      ];
+
     case 'waiting_qty':
       return [
         textMessage('ご予約の続きをご案内します。'),
@@ -1289,15 +1204,12 @@ function buildResumeMessages(session) {
       ];
 
     case 'waiting_name':
-      return [
-        buildCartSummaryMessage(session),
-        buildNameInputMessage()
-      ];
+      return [buildCartSummaryMessage(session), buildNameInputMessage()];
 
     case 'waiting_phone':
       return [
         textMessage(`ご予約名：${session.name || ''}`),
-        buildPhoneInputMessage()
+        textMessage('電話番号を入力してください。\n例：09012345678')
       ];
 
     case 'confirm':
@@ -1326,6 +1238,12 @@ function buildReminderMessages(session) {
     case 'waiting_rice_size':
       return [head, buildLargeRiceMessage(session.currentSelection?.menuName || '商品')];
 
+    case 'waiting_drink_confirm':
+      return [head, buildDrinkConfirmMessage(session.currentSelection?.menuName || '商品')];
+
+    case 'waiting_drink_menu':
+      return [head, textMessage('付けるドリンクを選んでください🥤'), buildDrinkFlexMessage()];
+
     case 'waiting_qty':
       return [
         head,
@@ -1340,18 +1258,10 @@ function buildReminderMessages(session) {
       return [head, buildCartSummaryMessage(session), buildCartActionMessage()];
 
     case 'waiting_name':
-      return [
-        head,
-        buildCartSummaryMessage(session),
-        buildNameInputMessage()
-      ];
+      return [head, buildCartSummaryMessage(session), buildNameInputMessage()];
 
     case 'waiting_phone':
-      return [
-        head,
-        textMessage(`ご予約名：${session.name || ''}`),
-        buildPhoneInputMessage()
-      ];
+      return [head, textMessage('電話番号を入力してください。\n例：09012345678')];
 
     case 'confirm':
       return [head, buildConfirmMessage(session)];
@@ -1399,8 +1309,6 @@ function resolveMenuByKey(session, key) {
   return MENUS[key] || null;
 }
 
-
-
 function resolveDrinkByKey(key) {
   return DRINK_OPTIONS.find((drink) => drink.key === key) || null;
 }
@@ -1429,22 +1337,20 @@ function getSession(userId) {
   return sessions.get(userId);
 }
 
-
 function clearSession(userId) {
-sessions.set(userId, {
-date: '',
-time: '',
-name: '',
-phone: '',
-items: [],
-currentSelection: null,
-dailyMenu: null,
-availableDates: [],
-availableDateOptions: [],
-step: ''
-});
+  sessions.set(userId, {
+    date: '',
+    time: '',
+    name: '',
+    phone: '',
+    items: [],
+    currentSelection: null,
+    dailyMenu: null,
+    availableDates: [],
+    availableDateOptions: [],
+    step: ''
+  });
 }
-
 
 function canOfferDrinkForSelection(selection) {
   if (!selection) return false;
@@ -1454,28 +1360,28 @@ function canOfferDrinkForSelection(selection) {
 }
 
 function restoreSessionFromPending(pending) {
-const items = safeJsonParse(pending.itemsJson, []);
-const currentSelection = safeJsonParse(pending.currentSelectionJson, null);
-const availableDates = safeJsonParse(pending.availableDatesJson, []);
-const availableDateOptions = safeJsonParse(pending.availableDateOptionsJson, []);
-const dailyMenuRaw = safeJsonParse(pending.dailyMenuJson, null);
+  const items = safeJsonParse(pending.itemsJson, []);
+  const currentSelection = safeJsonParse(pending.currentSelectionJson, null);
+  const availableDates = safeJsonParse(pending.availableDatesJson, []);
+  const availableDateOptions = safeJsonParse(pending.availableDateOptionsJson, []);
+  const dailyMenuRaw = safeJsonParse(pending.dailyMenuJson, null);
 
-return {
-date: normalizeYmdDate(pending.date || ''),
-time: pending.time || '',
-name: pending.name || '',
-phone: pending.phone || '',
-items: Array.isArray(items) ? items : [],
-currentSelection: currentSelection || null,
-dailyMenu: dailyMenuRaw?.name ? withMenuDefaults(dailyMenuRaw) : null,
-availableDates: Array.isArray(availableDates)
-? availableDates
-.map((date) => normalizeYmdDate(date))
-.filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-: [],
-availableDateOptions: Array.isArray(availableDateOptions) ? availableDateOptions : [],
-step: pending.step || ''
-};
+  return {
+    date: normalizeYmdDate(pending.date || ''),
+    time: pending.time || '',
+    name: pending.name || '',
+    phone: pending.phone || '',
+    items: Array.isArray(items) ? items : [],
+    currentSelection: currentSelection || null,
+    dailyMenu: dailyMenuRaw?.name ? withMenuDefaults(dailyMenuRaw) : null,
+    availableDates: Array.isArray(availableDates)
+      ? availableDates
+          .map((date) => normalizeYmdDate(date))
+          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      : [],
+    availableDateOptions: Array.isArray(availableDateOptions) ? availableDateOptions : [],
+    step: pending.step || ''
+  };
 }
 
 function hasActiveSession(session) {
@@ -1593,50 +1499,47 @@ async function fetchBookingConfig() {
   }
 }
 
-
 async function fetchDailyMenuConfig(dateStr) {
-try {
-const url = buildReservationApiUrl({
-action: 'getDailyMenu',
-date: dateStr
-});
+  try {
+    const url = buildReservationApiUrl({
+      action: 'getDailyMenu',
+      date: dateStr
+    });
 
-const response = await fetch(url);
-const text = await response.text();
+    const response = await fetch(url);
+    const text = await response.text();
 
-if (!response.ok) return null;
+    if (!response.ok) return null;
 
-const json = JSON.parse(text);
+    const json = JSON.parse(text);
+    if (!json.ok || !json.found) return null;
+    if (json.visible === false) return null;
+    if (String(json.isHidden || '').toLowerCase() === 'true') return null;
+    if (String(json.hidden || '').toLowerCase() === 'true') return null;
 
-if (!json.ok || !json.found) return null;
-if (json.visible === false) return null;
-if (String(json.isHidden || '').toLowerCase() === 'true') return null;
-if (String(json.hidden || '').toLowerCase() === 'true') return null;
-
-return withMenuDefaults({
-name: json.menuName || DEFAULT_DAILY_MENU.name,
-price: Number(json.price || DEFAULT_DAILY_MENU.price),
-description: json.description || '',
-imageUrl: json.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
-allowLargeRice: true
-});
-} catch {
-return null;
+    return withMenuDefaults({
+      name: json.menuName || DEFAULT_DAILY_MENU.name,
+      price: Number(json.price || DEFAULT_DAILY_MENU.price),
+      description: json.description || '',
+      imageUrl: json.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
+      allowLargeRice: true
+    });
+  } catch {
+    return null;
+  }
 }
-}
-
 
 function withMenuDefaults(menu) {
-return {
-name: menu.name || DEFAULT_DAILY_MENU.name,
-price: Number(menu.price || DEFAULT_DAILY_MENU.price),
-description: menu.description || '',
-imageUrl: menu.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
-allowLargeRice:
-typeof menu.allowLargeRice === 'boolean'
-? menu.allowLargeRice
-: DEFAULT_DAILY_MENU.allowLargeRice
-};
+  return {
+    name: menu.name || DEFAULT_DAILY_MENU.name,
+    price: Number(menu.price || DEFAULT_DAILY_MENU.price),
+    description: menu.description || '',
+    imageUrl: menu.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
+    allowLargeRice:
+      typeof menu.allowLargeRice === 'boolean'
+        ? menu.allowLargeRice
+        : DEFAULT_DAILY_MENU.allowLargeRice
+  };
 }
 
 async function saveReservationToSheet(reservation) {
@@ -1681,40 +1584,40 @@ async function saveReservationToSheet(reservation) {
 }
 
 async function savePendingSession(userId, session) {
-if (!userId || !RESERVATION_SAVE_URL) return { ok: false, error: 'missing config' };
+  if (!userId || !RESERVATION_SAVE_URL) return { ok: false, error: 'missing config' };
 
-try {
-const nowMillis = Date.now();
+  try {
+    const nowMillis = Date.now();
 
-const url = buildReservationApiUrl({
-action: 'savePending',
-userId,
-step: session.step || '',
-lastActionAtMillis: String(nowMillis),
-lastActionAt: getJstDateTimeLabel(),
-date: normalizeYmdDate(session.date || ''),
-time: session.time || '',
-itemsJson: JSON.stringify(session.items || []),
-currentSelectionJson: JSON.stringify(session.currentSelection || null),
-name: session.name || '',
-phone: session.phone || '',
-availableDatesJson: JSON.stringify(
-(session.availableDates || []).map((date) => normalizeYmdDate(date))
-),
-availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
-dailyMenuJson: JSON.stringify(session.dailyMenu ?? null)
-});
+    const url = buildReservationApiUrl({
+      action: 'savePending',
+      userId,
+      step: session.step || '',
+      lastActionAtMillis: String(nowMillis),
+      lastActionAt: getJstDateTimeLabel(),
+      date: normalizeYmdDate(session.date || ''),
+      time: session.time || '',
+      itemsJson: JSON.stringify(session.items || []),
+      currentSelectionJson: JSON.stringify(session.currentSelection || null),
+      name: session.name || '',
+      phone: session.phone || '',
+      availableDatesJson: JSON.stringify(
+        (session.availableDates || []).map((date) => normalizeYmdDate(date))
+      ),
+      availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
+      dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU)
+    });
 
-const response = await fetch(url);
-const text = await response.text();
+    const response = await fetch(url);
+    const text = await response.text();
 
-if (!response.ok) return { ok: false, error: text };
+    if (!response.ok) return { ok: false, error: text };
 
-const json = JSON.parse(text);
-return json.ok ? { ok: true } : { ok: false, error: json.error || 'savePending error' };
-} catch (err) {
-return { ok: false, error: String(err) };
-}
+    const json = JSON.parse(text);
+    return json.ok ? { ok: true } : { ok: false, error: json.error || 'savePending error' };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
 }
 
 async function getPendingSession(userId) {
