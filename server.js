@@ -11,6 +11,8 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
+const APP_VERSION = '2026-03-23-liiffix-02';
+
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
 const TIME_ZONE = 'Asia/Tokyo';
@@ -128,7 +130,8 @@ app.get('/api/liff-config', async (_req, res) => {
       bookableDateCount: BOOKABLE_DATE_COUNT,
       storeName: STORE_NAME,
       availableDates,
-      pickupTimes: PICKUP_TIMES
+      pickupTimes: PICKUP_TIMES,
+      version: APP_VERSION
     });
   } catch (error) {
     console.error('liff-config error:', error);
@@ -137,7 +140,8 @@ app.get('/api/liff-config', async (_req, res) => {
       bookableDateCount: BOOKABLE_DATE_COUNT,
       storeName: STORE_NAME,
       availableDates: [],
-      pickupTimes: PICKUP_TIMES
+      pickupTimes: PICKUP_TIMES,
+      version: APP_VERSION
     });
   }
 });
@@ -147,7 +151,12 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.status(200).json({ ok: true });
+  res.status(200).json({
+    ok: true,
+    version: APP_VERSION,
+    file: __filename,
+    cwd: process.cwd()
+  });
 });
 
 app.get('/tasks/remind-pending', async (req, res) => {
@@ -219,9 +228,9 @@ async function handleEvent(event) {
 
   if (event.type === 'message' && event.message?.type === 'text') {
     const rawText = event.message.text || '';
-    const text = rawText.trim();
+    const text = normalizeWebhookText(rawText);
 
-    console.log('incoming text:', rawText);
+    console.log(`[INCOMING ${APP_VERSION}]`, JSON.stringify(rawText));
 
     if (isNotifyIdText(text)) {
       await replyMessage(replyToken, [
@@ -260,9 +269,12 @@ async function handleEvent(event) {
       return;
     }
 
-    if (text.startsWith('予約日時|')) {
-      console.log('[LIFF ROUTE HIT]', text);
-      const [, selectedDate = '', selectedTime = ''] = text.split('|');
+    if (text.includes('予約日時|')) {
+      console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
+
+      const normalized = text.slice(text.indexOf('予約日時|'));
+      const [, selectedDate = '', selectedTime = ''] = normalized.split('|');
+
       await handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime);
       return;
     }
@@ -681,7 +693,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   const normalizedSelectedDate = normalizeYmdDate(selectedDate);
   const normalizedSelectedTime = String(selectedTime || '').trim();
 
-  console.log('[LIFF DATETIME RECEIVED]', {
+  console.log(`[LIFF DATETIME RECEIVED ${APP_VERSION}]`, {
     selectedDate: normalizedSelectedDate,
     selectedTime: normalizedSelectedTime
   });
@@ -700,7 +712,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   session.availableDates = availableDates;
 
   if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
-    console.log('[LIFF DATETIME REJECTED DATE]', normalizedSelectedDate);
+    console.log(`[LIFF DATETIME REJECTED DATE ${APP_VERSION}]`, normalizedSelectedDate);
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('その日は受付対象外です。営業日から選び直してください。'),
@@ -710,7 +722,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   }
 
   if (!PICKUP_TIMES.includes(normalizedSelectedTime)) {
-    console.log('[LIFF DATETIME REJECTED TIME]', normalizedSelectedTime);
+    console.log(`[LIFF DATETIME REJECTED TIME ${APP_VERSION}]`, normalizedSelectedTime);
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('受取時間が受付対象外です。もう一度カレンダーから選んでください。'),
@@ -725,7 +737,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   session.step = 'waiting_menu';
   await savePendingSession(userId, session);
 
-  console.log('[LIFF DATETIME ACCEPTED]', {
+  console.log(`[LIFF DATETIME ACCEPTED ${APP_VERSION}]`, {
     date: session.date,
     time: session.time,
     step: session.step
@@ -1751,6 +1763,13 @@ function isReservationComplete(session) {
   );
 }
 
+function normalizeWebhookText(text) {
+  return String(text || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .trim();
+}
+
 function normalizeIncomingText(text) {
   return String(text || '')
     .normalize('NFKC')
@@ -1855,5 +1874,7 @@ function utcDateFromYmd(ymd) {
 }
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`[BOOT ${APP_VERSION}] Server running on port ${PORT}`);
+  console.log(`[BOOT ${APP_VERSION}] file=${__filename}`);
+  console.log(`[BOOT ${APP_VERSION}] cwd=${process.cwd()}`);
 });
