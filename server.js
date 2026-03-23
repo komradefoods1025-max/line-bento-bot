@@ -23,7 +23,8 @@ const DEFAULT_DAILY_MENU = {
   name: '日替わり弁当',
   price: 600,
   description: 'その日のお楽しみメニューです',
-  imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg'
+  imageUrl:
+    'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg'
 };
 
 const MENUS = {
@@ -31,19 +32,22 @@ const MENUS = {
     name: 'からあげ弁当',
     price: 700,
     description: 'ジューシーな唐揚げが人気の定番弁当',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_13-12-15.jpg'
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_13-12-15.jpg'
   },
   shogayaki: {
     name: '生姜焼き弁当',
     price: 700,
     description: '香ばしく焼き上げたごはんが進む一品',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-13-55.jpg'
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-13-55.jpg'
   },
   chicken_nanban: {
     name: 'チキン南蛮弁当',
     price: 900,
     description: 'オリジナルタルタルが美味な至極の一品',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-35-09.jpg'
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-35-09.jpg'
   }
 };
 
@@ -54,13 +58,21 @@ const EXTRA_MENUS = {
     name: '追加唐揚げ',
     price: 80,
     description: 'お弁当に追加できる唐揚げです（1個80円）',
-    imageUrl: 'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg'
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg'
   }
 };
 
 const PICKUP_TIMES = [
-  '11:30', '11:45', '12:00', '12:15', '12:30',
-  '12:45', '13:00', '13:15', '13:30'
+  '11:30',
+  '11:45',
+  '12:00',
+  '12:15',
+  '12:30',
+  '12:45',
+  '13:00',
+  '13:15',
+  '13:30'
 ];
 
 const sessions = new Map();
@@ -72,7 +84,9 @@ app.get('/api/liff-config', async (_req, res) => {
     const bookingConfig = await fetchBookingConfig();
     const availableDates =
       bookingConfig.ok && Array.isArray(bookingConfig.dates)
-        ? bookingConfig.dates.map((item) => item.date).filter(Boolean)
+        ? bookingConfig.dates
+            .map((item) => normalizeYmdDate(item?.date))
+            .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
         : [];
 
     res.json({
@@ -253,7 +267,9 @@ async function handleEvent(event) {
       if (!isValidPhone(phone)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
-          textMessage('電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678')
+          textMessage(
+            '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
+          )
         ]);
         return;
       }
@@ -439,9 +455,7 @@ async function handleEvent(event) {
       clearSession(userId);
       await clearPendingSession(userId);
 
-      await replyMessage(replyToken, [
-        buildReservationCompleteMessage(reservation)
-      ]);
+      await replyMessage(replyToken, [buildReservationCompleteMessage(reservation)]);
       return;
     }
   }
@@ -454,15 +468,24 @@ async function beginReservationFlow(replyToken, userId) {
   const session = getSession(userId);
   const bookingConfig = await fetchBookingConfig();
 
-  if (!bookingConfig.ok || !bookingConfig.dates?.length) {
+  const availableDates =
+    bookingConfig.ok && Array.isArray(bookingConfig.dates)
+      ? bookingConfig.dates
+          .map((item) => normalizeYmdDate(item?.date))
+          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      : [];
+
+  if (!bookingConfig.ok || !availableDates.length) {
     await replyMessage(replyToken, [
       textMessage('現在ご案内できる営業日がありません。時間をおいてお試しください。')
     ]);
     return;
   }
 
-  session.availableDateOptions = bookingConfig.dates;
-  session.availableDates = bookingConfig.dates.map((item) => item.date);
+  session.availableDateOptions = Array.isArray(bookingConfig.dates)
+    ? bookingConfig.dates
+    : [];
+  session.availableDates = availableDates;
   session.step = 'waiting_date';
 
   await savePendingSession(userId, session);
@@ -474,7 +497,9 @@ async function beginReservationFlow(replyToken, userId) {
 }
 
 function buildDatePickerMessage(availableDates) {
-  const dates = Array.isArray(availableDates) ? availableDates : [];
+  const dates = Array.isArray(availableDates)
+    ? availableDates.map((date) => normalizeYmdDate(date)).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    : [];
 
   if (!dates.length) {
     return textMessage('選択できる日付がありません。');
@@ -532,13 +557,20 @@ function createDateSelectMessage() {
 }
 
 function isYmdDate(text) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(text || '').trim());
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalizeYmdDate(text));
 }
 
 async function handleSelectedDate(replyToken, userId, session, selectedDate) {
-  const availableDates = Array.isArray(session.availableDates) ? session.availableDates : [];
+  const normalizedSelectedDate = normalizeYmdDate(selectedDate);
+  const availableDates = Array.isArray(session.availableDates)
+    ? session.availableDates
+        .map((date) => normalizeYmdDate(date))
+        .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    : [];
 
-  if (!selectedDate || !availableDates.includes(selectedDate)) {
+  session.availableDates = availableDates;
+
+  if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('その日は受付対象外です。営業日から選び直してください。'),
@@ -547,13 +579,13 @@ async function handleSelectedDate(replyToken, userId, session, selectedDate) {
     return;
   }
 
-  session.date = selectedDate;
-  session.dailyMenu = await fetchDailyMenuConfig(selectedDate);
+  session.date = normalizedSelectedDate;
+  session.dailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
   session.step = 'waiting_time';
   await savePendingSession(userId, session);
 
   await replyMessage(replyToken, [
-    textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`),
+    textMessage(`受取日：${formatDateWithWeekday(normalizedSelectedDate)}`),
     buildTimeMessage()
   ]);
 }
@@ -590,7 +622,7 @@ function buildMenuStepMessages(session) {
   return messages;
 }
 
-function buildMenuFlexMessage(session) {
+function buildMenuFlexMessage(_session) {
   return {
     type: 'flex',
     altText: 'お弁当メニュー',
@@ -608,7 +640,8 @@ function buildMenuFlexMessage(session) {
 
 function buildMenuBubble(itemKey, menu) {
   const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
-  const displayText = itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
+  const displayText =
+    itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
 
   return {
     type: 'bubble',
@@ -682,8 +715,8 @@ function buildQtyMessage(menuName) {
 function buildCartSummaryMessage(session) {
   return textMessage(
     `現在のご注文内容です。\n\n${formatOrderLines(session.items)}` +
-    `\n合計個数：${getCartTotalQty(session.items)}個` +
-    `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`
+      `\n合計個数：${getCartTotalQty(session.items)}個` +
+      `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`
   );
 }
 
@@ -741,9 +774,7 @@ function startGuideMessage() {
     type: 'text',
     text: `${STORE_NAME}のランチ弁当予約です。\n「予約」と送っていただければ開始できます。`,
     quickReply: {
-      items: [
-        quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')
-      ]
+      items: [quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')]
     }
   };
 }
@@ -759,15 +790,14 @@ function buildResumeMessages(session) {
     case 'waiting_time':
       return [
         textMessage('ご予約の続きをご案内します。'),
-        session.date ? textMessage(`受取日：${formatDateWithWeekday(session.date)}`) : textMessage(''),
+        session.date
+          ? textMessage(`受取日：${formatDateWithWeekday(session.date)}`)
+          : textMessage(''),
         buildTimeMessage()
       ];
 
     case 'waiting_menu':
-      return [
-        textMessage('ご予約の続きをご案内します。'),
-        ...buildMenuStepMessages(session)
-      ];
+      return [textMessage('ご予約の続きをご案内します。'), ...buildMenuStepMessages(session)];
 
     case 'waiting_qty':
       return [
@@ -784,10 +814,7 @@ function buildResumeMessages(session) {
       ];
 
     case 'waiting_name':
-      return [
-        buildCartSummaryMessage(session),
-        textMessage('ご予約名を入力してください。')
-      ];
+      return [buildCartSummaryMessage(session), textMessage('ご予約名を入力してください。')];
 
     case 'waiting_phone':
       return [
@@ -804,7 +831,9 @@ function buildResumeMessages(session) {
 }
 
 function buildReminderMessages(session) {
-  const head = textMessage('ご注文を続けますか？\n5分以上操作がなかったため、続きからご案内します。');
+  const head = textMessage(
+    'ご注文を続けますか？\n5分以上操作がなかったため、続きからご案内します。'
+  );
 
   switch (session.step) {
     case 'waiting_date':
@@ -856,7 +885,7 @@ function textMessage(text) {
   return { type: 'text', text };
 }
 
-function resolveMenuByKey(session, key) {
+function resolveMenuByKey(_session, key) {
   if (EXTRA_MENUS[key]) {
     return EXTRA_MENUS[key];
   }
@@ -911,14 +940,18 @@ function restoreSessionFromPending(pending) {
   const dailyMenu = safeJsonParse(pending.dailyMenuJson, { ...DEFAULT_DAILY_MENU });
 
   return {
-    date: pending.date || '',
+    date: normalizeYmdDate(pending.date || ''),
     time: pending.time || '',
     name: pending.name || '',
     phone: pending.phone || '',
     items: Array.isArray(items) ? items : [],
     currentSelection: currentSelection || null,
     dailyMenu: dailyMenu?.name ? dailyMenu : { ...DEFAULT_DAILY_MENU },
-    availableDates: Array.isArray(availableDates) ? availableDates : [],
+    availableDates: Array.isArray(availableDates)
+      ? availableDates
+          .map((date) => normalizeYmdDate(date))
+          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      : [],
     availableDateOptions: Array.isArray(availableDateOptions) ? availableDateOptions : [],
     step: pending.step || ''
   };
@@ -929,11 +962,11 @@ function hasActiveSession(session) {
 
   return Boolean(
     session.step ||
-    session.date ||
-    session.time ||
-    session.name ||
-    session.phone ||
-    (Array.isArray(session.items) && session.items.length > 0)
+      session.date ||
+      session.time ||
+      session.name ||
+      session.phone ||
+      (Array.isArray(session.items) && session.items.length > 0)
   );
 }
 
@@ -959,7 +992,10 @@ function formatOrderLines(items) {
   if (!items || !items.length) return '・商品が入っていません';
 
   return items
-    .map((item) => `・${item.menuName} ×${item.qty}個　¥${Number(item.total).toLocaleString('ja-JP')}`)
+    .map(
+      (item) =>
+        `・${item.menuName} ×${item.qty}個　¥${Number(item.total).toLocaleString('ja-JP')}`
+    )
     .join('\n');
 }
 
@@ -1055,13 +1091,15 @@ async function savePendingSession(userId, session) {
       step: session.step || '',
       lastActionAtMillis: String(nowMillis),
       lastActionAt: getJstDateTimeLabel(),
-      date: session.date || '',
+      date: normalizeYmdDate(session.date || ''),
       time: session.time || '',
       itemsJson: JSON.stringify(session.items || []),
       currentSelectionJson: JSON.stringify(session.currentSelection || null),
       name: session.name || '',
       phone: session.phone || '',
-      availableDatesJson: JSON.stringify(session.availableDates || []),
+      availableDatesJson: JSON.stringify(
+        (session.availableDates || []).map((date) => normalizeYmdDate(date))
+      ),
       availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
       dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU)
     });
@@ -1132,7 +1170,9 @@ async function fetchReminderTargets(minutes) {
     if (!response.ok) return { ok: false, error: text, targets: [] };
 
     const json = JSON.parse(text);
-    return json.ok ? json : { ok: false, error: json.error || 'getReminderTargets error', targets: [] };
+    return json.ok
+      ? json
+      : { ok: false, error: json.error || 'getReminderTargets error', targets: [] };
   } catch (err) {
     return { ok: false, error: String(err), targets: [] };
   }
@@ -1231,21 +1271,21 @@ async function notifyStoreByLine(reservation) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
     },
     body: JSON.stringify({
       to: STORE_NOTIFY_LINE_ID,
       messages: [
         textMessage(
           `【店舗通知：新規ランチ予約】\n\n` +
-          `受付番号：${reservation.reservationNo}\n` +
-          `受取日：${formatDateWithWeekday(reservation.date)}\n` +
-          `受取時間：${reservation.time}\n` +
-          `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
-          `合計個数：${reservation.totalQty}個\n` +
-          `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-          `お名前：${reservation.name}様\n` +
-          `電話番号：${reservation.phone}`
+            `受付番号：${reservation.reservationNo}\n` +
+            `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+            `受取時間：${reservation.time}\n` +
+            `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
+            `合計個数：${reservation.totalQty}個\n` +
+            `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+            `お名前：${reservation.name}\n` +
+            `電話番号：${reservation.phone}`
         )
       ]
     })
@@ -1262,7 +1302,7 @@ async function replyMessage(replyToken, messages) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
     },
     body: JSON.stringify({ replyToken, messages })
   });
@@ -1278,7 +1318,7 @@ async function pushMessage(to, messages) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
     },
     body: JSON.stringify({ to, messages })
   });
@@ -1306,10 +1346,7 @@ function buildReservationApiUrl(params) {
 function verifySignature(rawBody, signature, secret) {
   if (!secret || !signature) return false;
 
-  const hash = crypto
-    .createHmac('SHA256', secret)
-    .update(rawBody)
-    .digest('base64');
+  const hash = crypto.createHmac('SHA256', secret).update(rawBody).digest('base64');
 
   try {
     return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
@@ -1362,14 +1399,19 @@ function normalizeIncomingText(text) {
     .trim();
 }
 
+function normalizeYmdDate(value) {
+  return String(value || '').replace(/\s+/g, '').trim();
+}
+
 function isReservationStartText(text) {
   const t = normalizeIncomingText(text);
 
   if (!t) return false;
   if (t.includes('予約')) return true;
 
-  return ['弁当', 'ランチ', 'テイクアウト']
-    .some((keyword) => t.includes(keyword) && t.includes('したい'));
+  return ['弁当', 'ランチ', 'テイクアウト'].some(
+    (keyword) => t.includes(keyword) && t.includes('したい')
+  );
 }
 
 function isResetText(text) {
@@ -1448,7 +1490,7 @@ function getWeekdayJa(dateStr) {
 }
 
 function utcDateFromYmd(ymd) {
-  const [year, month, day] = ymd.split('-').map(Number);
+  const [year, month, day] = normalizeYmdDate(ymd).split('-').map(Number);
   return new Date(Date.UTC(year, month - 1, day));
 }
 
