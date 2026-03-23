@@ -67,12 +67,29 @@ const sessions = new Map();
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/api/liff-config', (_req, res) => {
-  res.json({
-    liffId: LIFF_ID,
-    bookableDateCount: BOOKABLE_DATE_COUNT,
-    storeName: STORE_NAME
-  });
+app.get('/api/liff-config', async (_req, res) => {
+  try {
+    const bookingConfig = await fetchBookingConfig();
+    const availableDates =
+      bookingConfig.ok && Array.isArray(bookingConfig.dates)
+        ? bookingConfig.dates.map((item) => item.date).filter(Boolean)
+        : [];
+
+    res.json({
+      liffId: LIFF_ID,
+      bookableDateCount: BOOKABLE_DATE_COUNT,
+      storeName: STORE_NAME,
+      availableDates
+    });
+  } catch (error) {
+    console.error('liff-config error:', error);
+    res.json({
+      liffId: LIFF_ID,
+      bookableDateCount: BOOKABLE_DATE_COUNT,
+      storeName: STORE_NAME,
+      availableDates: []
+    });
+  }
 });
 
 app.get('/', (_req, res) => {
