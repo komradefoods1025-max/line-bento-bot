@@ -254,13 +254,13 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'pick_date') {
-      const selectedDate = data.date || '';
+      const selectedDate = event.postback?.params?.date || '';
 
       if (!selectedDate || !session.availableDates.includes(selectedDate)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('その日は受付対象外です。営業日から選び直してください。'),
-          buildDateOptionsMessage(session.availableDateOptions)
+          buildDatePickerMessage(session.availableDates)
         ]);
         return;
       }
@@ -270,19 +270,10 @@ async function handleEvent(event) {
       session.step = 'waiting_time';
       await savePendingSession(userId, session);
 
-      const messages = [textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`)];
-
-      if (session.dailyMenu?.name) {
-        messages.push(
-          textMessage(
-            `★この日の日替わり★\n${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
-            (session.dailyMenu.description ? `\n${session.dailyMenu.description}` : '')
-          )
-        );
-      }
-
-      messages.push(buildTimeMessage());
-      await replyMessage(replyToken, messages);
+      await replyMessage(replyToken, [
+        textMessage(`受取日：${formatDateWithWeekday(selectedDate)}`),
+        buildTimeMessage()
+      ]);
       return;
     }
 
@@ -461,23 +452,40 @@ async function beginReservationFlow(replyToken, userId) {
   await savePendingSession(userId, session);
 
   await replyMessage(replyToken, [
-    textMessage(`${STORE_NAME}のランチ弁当予約です！\n営業日のみ表示しています🗓️`),
-    buildDateOptionsMessage(bookingConfig.dates)
+    textMessage(`${STORE_NAME}のランチ弁当予約です！\nカレンダーから受取日を選んでください🗓️`),
+    buildDatePickerMessage(session.availableDates)
   ]);
 }
 
-function buildDateOptionsMessage(dateOptions) {
+function buildDatePickerMessage(availableDates) {
+  const dates = Array.isArray(availableDates) ? availableDates : [];
+
+  if (!dates.length) {
+    return textMessage('選択できる日付がありません。');
+  }
+
+  const minDate = dates[0];
+  const maxDate = dates[dates.length - 1];
+  const initialDate = dates[0];
+
   return {
     type: 'text',
     text: '受取日を選んでください📆',
     quickReply: {
-      items: (dateOptions || []).map((item) =>
-        quickPostbackItem(
-          item.label,
-          `action=pick_date&date=${encodeURIComponent(item.date)}`,
-          item.label
-        )
-      )
+      items: [
+        {
+          type: 'action',
+          action: {
+            type: 'datetimepicker',
+            label: '日付を選ぶ',
+            data: 'action=pick_date',
+            mode: 'date',
+            initial: initialDate,
+            min: minDate,
+            max: maxDate
+          }
+        }
+      ]
     }
   };
 }
@@ -502,12 +510,6 @@ function buildMenuStepMessages(session) {
   const messages = [];
   let intro = 'ご希望の商品をお選びください🍱';
 
-  if (session.dailyMenu?.name) {
-    intro +=
-      `\n\n★本日の日替わり★\n${session.dailyMenu.name}　¥${Number(session.dailyMenu.price).toLocaleString('ja-JP')}` +
-      (session.dailyMenu.description ? `\n${session.dailyMenu.description}` : '');
-  }
-
   if (session.items.length) {
     intro +=
       `\n\n現在のご注文\n${formatOrderLines(session.items)}` +
@@ -521,8 +523,6 @@ function buildMenuStepMessages(session) {
 }
 
 function buildMenuFlexMessage(session) {
-  const dailyMenu = session.dailyMenu || DEFAULT_DAILY_MENU;
-
   return {
     type: 'flex',
     altText: 'お弁当メニュー',
@@ -532,7 +532,6 @@ function buildMenuFlexMessage(session) {
         buildMenuBubble('karaage', MENUS.karaage),
         buildMenuBubble('shogayaki', MENUS.shogayaki),
         buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
-        buildMenuBubble('daily', dailyMenu),
         buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
       ]
     }
@@ -644,7 +643,7 @@ function buildConfirmMessage(session) {
       `【ご注文内容】\n${formatOrderLines(session.items)}\n` +
       `【合計個数】${getCartTotalQty(session.items)}個\n` +
       `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}\n` +
+      `【お名前】${session.name}様\n` +
       `【電話番号】${session.phone}`,
     quickReply: {
       items: [
@@ -664,7 +663,7 @@ function buildReservationCompleteMessage(reservation) {
       `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
       `合計個数：${reservation.totalQty}個\n` +
       `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-      `お名前：${reservation.name}\n` +
+      `お名前：${reservation.name}様\n` +
       `電話番号：${reservation.phone}`
   );
 }
@@ -686,17 +685,15 @@ function buildResumeMessages(session) {
     case 'waiting_date':
       return [
         textMessage('ご予約の続きから再開できます。'),
-        buildDateOptionsMessage(session.availableDateOptions || [])
+        buildDatePickerMessage(session.availableDates || [])
       ];
 
-    case 'waiting_time': {
-      const messages = [textMessage('ご予約の続きをご案内します。')];
-      if (session.date) {
-        messages.push(textMessage(`受取日：${formatDateWithWeekday(session.date)}`));
-      }
-      messages.push(buildTimeMessage());
-      return messages;
-    }
+    case 'waiting_time':
+      return [
+        textMessage('ご予約の続きをご案内します。'),
+        session.date ? textMessage(`受取日：${formatDateWithWeekday(session.date)}`) : textMessage(''),
+        buildTimeMessage()
+      ];
 
     case 'waiting_menu':
       return [
@@ -743,7 +740,7 @@ function buildReminderMessages(session) {
 
   switch (session.step) {
     case 'waiting_date':
-      return [head, buildDateOptionsMessage(session.availableDateOptions || [])];
+      return [head, buildDatePickerMessage(session.availableDates || [])];
 
     case 'waiting_time':
       return [head, buildTimeMessage()];
@@ -792,10 +789,6 @@ function textMessage(text) {
 }
 
 function resolveMenuByKey(session, key) {
-  if (key === 'daily') {
-    return session.dailyMenu || DEFAULT_DAILY_MENU;
-  }
-
   if (EXTRA_MENUS[key]) {
     return EXTRA_MENUS[key];
   }
