@@ -250,11 +250,6 @@ async function handleEvent(event) {
     }
 
     if (isResumeText(text)) {
-      if (text.startsWith('予約日時|')) {
-  const [, selectedDate = '', selectedTime = ''] = text.split('|');
-  await handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime);
-  return;
-}
       if (hasActiveSession(session)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, buildResumeMessages(session));
@@ -266,6 +261,7 @@ async function handleEvent(event) {
     }
 
     if (text.startsWith('予約日時|')) {
+      console.log('[LIFF ROUTE HIT]', text);
       const [, selectedDate = '', selectedTime = ''] = text.split('|');
       await handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime);
       return;
@@ -273,54 +269,6 @@ async function handleEvent(event) {
 
     if (session.step === 'waiting_date' && isYmdDate(text)) {
       await handleSelectedDate(replyToken, userId, session, text);
-      async function handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime) {
-  const normalizedSelectedDate = normalizeYmdDate(selectedDate);
-  const normalizedSelectedTime = String(selectedTime || '').trim();
-
-  const bookingConfig = await fetchBookingConfig();
-  const availableDates =
-    bookingConfig.ok && Array.isArray(bookingConfig.dates)
-      ? bookingConfig.dates
-          .map((item) => normalizeYmdDate(item?.date))
-          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-      : [];
-
-  session.availableDateOptions = Array.isArray(bookingConfig.dates)
-    ? bookingConfig.dates
-    : [];
-  session.availableDates = availableDates;
-
-  if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('その日は受付対象外です。営業日から選び直してください。'),
-      createDateSelectMessage()
-    ]);
-    return;
-  }
-
-  if (!PICKUP_TIMES.includes(normalizedSelectedTime)) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('受取時間が受付対象外です。もう一度カレンダーから選んでください。'),
-      createDateSelectMessage()
-    ]);
-    return;
-  }
-
-  session.date = normalizedSelectedDate;
-  session.time = normalizedSelectedTime;
-  session.dailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
-  session.step = 'waiting_menu';
-  await savePendingSession(userId, session);
-
-  await replyMessage(replyToken, [
-    textMessage(
-      `受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n受取時間：${normalizedSelectedTime}`
-    ),
-    ...buildMenuStepMessages(session)
-  ]);
-}
       return;
     }
 
@@ -733,6 +681,11 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   const normalizedSelectedDate = normalizeYmdDate(selectedDate);
   const normalizedSelectedTime = String(selectedTime || '').trim();
 
+  console.log('[LIFF DATETIME RECEIVED]', {
+    selectedDate: normalizedSelectedDate,
+    selectedTime: normalizedSelectedTime
+  });
+
   const bookingConfig = await fetchBookingConfig();
   const availableDates =
     bookingConfig.ok && Array.isArray(bookingConfig.dates)
@@ -747,6 +700,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   session.availableDates = availableDates;
 
   if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
+    console.log('[LIFF DATETIME REJECTED DATE]', normalizedSelectedDate);
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('その日は受付対象外です。営業日から選び直してください。'),
@@ -756,6 +710,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   }
 
   if (!PICKUP_TIMES.includes(normalizedSelectedTime)) {
+    console.log('[LIFF DATETIME REJECTED TIME]', normalizedSelectedTime);
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('受取時間が受付対象外です。もう一度カレンダーから選んでください。'),
@@ -769,6 +724,12 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   session.dailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
   session.step = 'waiting_menu';
   await savePendingSession(userId, session);
+
+  console.log('[LIFF DATETIME ACCEPTED]', {
+    date: session.date,
+    time: session.time,
+    step: session.step
+  });
 
   await replyMessage(replyToken, [
     textMessage(
