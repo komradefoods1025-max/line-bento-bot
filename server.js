@@ -864,43 +864,47 @@ function buildTimeMessage() {
     }
   };
 }
+function getVisibleBentoBubbles(session) {
+  const bubbles = [];
 
-function buildMenuStepMessages(session) {
-  const messages = [];
-  let intro = 'ご希望の商品・ドリンクをお選びください🍱🥤';
-
-  if (session.items.length) {
-    intro +=
-      `\n\n現在のご注文\n${formatOrderLines(session.items)}` +
-      `\n合計個数：${getCartTotalQty(session.items)}個` +
-      `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
+  if (session?.dailyMenu?.name) {
+    bubbles.push(buildMenuBubble(DAILY_MENU_KEY, session.dailyMenu));
   }
 
-  messages.push(textMessage(intro));
-  messages.push(buildMenuFlexMessage(session));
-  messages.push(buildDrinkFlexMessage());
-  return messages;
+  bubbles.push(
+    buildMenuBubble('karaage', MENUS.karaage),
+    buildMenuBubble('shogayaki', MENUS.shogayaki),
+    buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
+    buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
+  );
+
+  return bubbles;
+}
+function buildMenuStepMessages(session) {
+const messages = [];
+let intro = 'ご希望の商品をお選びください🍱';
+
+if (session.items.length) {
+intro +=
+`\n\n現在のご注文\n${formatOrderLines(session.items)}` +
+`\n合計個数：${getCartTotalQty(session.items)}個` +
+`\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
+}
+
+messages.push(textMessage(intro));
+messages.push(buildMenuFlexMessage(session));
+return messages;
 }
 
 function buildMenuFlexMessage(session) {
-  const dailyMenu = session?.dailyMenu?.name
-    ? session.dailyMenu
-    : DEFAULT_DAILY_MENU;
-
-  return {
-    type: 'flex',
-    altText: 'お弁当メニュー',
-    contents: {
-      type: 'carousel',
-      contents: [
-        buildMenuBubble(DAILY_MENU_KEY, dailyMenu),
-        buildMenuBubble('karaage', MENUS.karaage),
-        buildMenuBubble('shogayaki', MENUS.shogayaki),
-        buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
-        buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
-      ]
-    }
-  };
+return {
+type: 'flex',
+altText: 'お弁当メニュー',
+contents: {
+type: 'carousel',
+contents: getVisibleBentoBubbles(session)
+}
+};
 }
 
 function buildDrinkFlexMessage() {
@@ -915,87 +919,77 @@ function buildDrinkFlexMessage() {
 }
 
 function buildMenuBubble(itemKey, menu) {
-  const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
-  const displayText =
-    itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
+const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
+const displayText =
+itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
 
-  const bodyContents = [
-    {
-      type: 'text',
-      text: menu.name,
-      weight: 'bold',
-      size: 'lg',
-      wrap: true
-    },
-    {
-      type: 'text',
-      text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
-      weight: 'bold',
-      size: 'md',
-      color: '#16A34A'
-    },
-    {
-      type: 'text',
-      text: menu.description || '',
-      size: 'sm',
-      color: '#666666',
-      wrap: true
-    }
-  ];
+const bodyContents = [
+{
+type: 'text',
+text: menu.name,
+weight: 'bold',
+size: 'lg',
+wrap: true
+},
+{
+type: 'text',
+text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
+weight: 'bold',
+size: 'md',
+color: '#16A34A'
+},
+{
+type: 'text',
+text: menu.description || '',
+size: 'sm',
+color: '#666666',
+wrap: true
+}
+];
 
-  if (menu.allowLargeRice) {
-    bodyContents.push({
-      type: 'text',
-      text: 'ご飯大盛り対応',
-      size: 'xs',
-      color: '#B45309',
-      wrap: true
-    });
-  }
+if (menu.allowLargeRice) {
+bodyContents.push({
+type: 'text',
+text: 'ご飯大盛り対応',
+size: 'xs',
+color: '#B45309',
+wrap: true
+});
+}
 
-  if (itemKey !== EXTRA_KARAAGE_KEY) {
-    bodyContents.push({
-      type: 'text',
-      text: 'ドリンク追加OK',
-      size: 'xs',
-      color: '#2563EB',
-      wrap: true
-    });
-  }
-
-  return {
-    type: 'bubble',
-    size: 'mega',
-    hero: {
-      type: 'image',
-      url: menu.imageUrl,
-      size: 'full',
-      aspectRatio: '20:13',
-      aspectMode: 'cover'
-    },
-    body: {
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'sm',
-      contents: bodyContents
-    },
-    footer: {
-      type: 'box',
-      layout: 'vertical',
-      contents: [
-        {
-          type: 'button',
-          style: 'primary',
-          action: {
-            type: 'postback',
-            label: buttonLabel,
-            data: `action=menu&item=${itemKey}`,
-            displayText
-          }
-        }
-      ]
-    }
-  };
+return {
+type: 'bubble',
+size: 'mega',
+hero: {
+type: 'image',
+url: menu.imageUrl,
+size: 'full',
+aspectRatio: '20:13',
+aspectMode: 'cover'
+},
+body: {
+type: 'box',
+layout: 'vertical',
+spacing: 'sm',
+contents: bodyContents
+},
+footer: {
+type: 'box',
+layout: 'vertical',
+contents: [
+{
+type: 'button',
+style: 'primary',
+action: {
+type: 'postback',
+label: buttonLabel,
+data: `action=menu&item=${itemKey}`,
+displayText
+}
+}
+]
+}
+};
 }
 
 function buildDrinkBubble(drink) {
@@ -1304,7 +1298,7 @@ function textMessage(text) {
 
 function resolveMenuByKey(session, key) {
   if (key === DAILY_MENU_KEY) {
-    return session?.dailyMenu?.name ? session.dailyMenu : DEFAULT_DAILY_MENU;
+    return session?.dailyMenu?.name ? session.dailyMenu : null;
   }
 
   if (EXTRA_MENUS[key]) {
@@ -1313,6 +1307,8 @@ function resolveMenuByKey(session, key) {
 
   return MENUS[key] || null;
 }
+
+
 
 function resolveDrinkByKey(key) {
   return DRINK_OPTIONS.find((drink) => drink.key === key) || null;
@@ -1342,20 +1338,22 @@ function getSession(userId) {
   return sessions.get(userId);
 }
 
+
 function clearSession(userId) {
-  sessions.set(userId, {
-    date: '',
-    time: '',
-    name: '',
-    phone: '',
-    items: [],
-    currentSelection: null,
-    dailyMenu: { ...DEFAULT_DAILY_MENU },
-    availableDates: [],
-    availableDateOptions: [],
-    step: ''
-  });
+sessions.set(userId, {
+date: '',
+time: '',
+name: '',
+phone: '',
+items: [],
+currentSelection: null,
+dailyMenu: null,
+availableDates: [],
+availableDateOptions: [],
+step: ''
+});
 }
+
 
 function canOfferDrinkForSelection(selection) {
   if (!selection) return false;
@@ -1365,28 +1363,28 @@ function canOfferDrinkForSelection(selection) {
 }
 
 function restoreSessionFromPending(pending) {
-  const items = safeJsonParse(pending.itemsJson, []);
-  const currentSelection = safeJsonParse(pending.currentSelectionJson, null);
-  const availableDates = safeJsonParse(pending.availableDatesJson, []);
-  const availableDateOptions = safeJsonParse(pending.availableDateOptionsJson, []);
-  const dailyMenu = safeJsonParse(pending.dailyMenuJson, { ...DEFAULT_DAILY_MENU });
+const items = safeJsonParse(pending.itemsJson, []);
+const currentSelection = safeJsonParse(pending.currentSelectionJson, null);
+const availableDates = safeJsonParse(pending.availableDatesJson, []);
+const availableDateOptions = safeJsonParse(pending.availableDateOptionsJson, []);
+const dailyMenuRaw = safeJsonParse(pending.dailyMenuJson, null);
 
-  return {
-    date: normalizeYmdDate(pending.date || ''),
-    time: pending.time || '',
-    name: pending.name || '',
-    phone: pending.phone || '',
-    items: Array.isArray(items) ? items : [],
-    currentSelection: currentSelection || null,
-    dailyMenu: dailyMenu?.name ? withMenuDefaults(dailyMenu) : { ...DEFAULT_DAILY_MENU },
-    availableDates: Array.isArray(availableDates)
-      ? availableDates
-          .map((date) => normalizeYmdDate(date))
-          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-      : [],
-    availableDateOptions: Array.isArray(availableDateOptions) ? availableDateOptions : [],
-    step: pending.step || ''
-  };
+return {
+date: normalizeYmdDate(pending.date || ''),
+time: pending.time || '',
+name: pending.name || '',
+phone: pending.phone || '',
+items: Array.isArray(items) ? items : [],
+currentSelection: currentSelection || null,
+dailyMenu: dailyMenuRaw?.name ? withMenuDefaults(dailyMenuRaw) : null,
+availableDates: Array.isArray(availableDates)
+? availableDates
+.map((date) => normalizeYmdDate(date))
+.filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+: [],
+availableDateOptions: Array.isArray(availableDateOptions) ? availableDateOptions : [],
+step: pending.step || ''
+};
 }
 
 function hasActiveSession(session) {
@@ -1504,44 +1502,50 @@ async function fetchBookingConfig() {
   }
 }
 
+
 async function fetchDailyMenuConfig(dateStr) {
-  try {
-    const url = buildReservationApiUrl({
-      action: 'getDailyMenu',
-      date: dateStr
-    });
+try {
+const url = buildReservationApiUrl({
+action: 'getDailyMenu',
+date: dateStr
+});
 
-    const response = await fetch(url);
-    const text = await response.text();
+const response = await fetch(url);
+const text = await response.text();
 
-    if (!response.ok) return { ...DEFAULT_DAILY_MENU };
+if (!response.ok) return null;
 
-    const json = JSON.parse(text);
-    if (!json.ok || !json.found) return { ...DEFAULT_DAILY_MENU };
+const json = JSON.parse(text);
 
-    return withMenuDefaults({
-      name: json.menuName || DEFAULT_DAILY_MENU.name,
-      price: Number(json.price || DEFAULT_DAILY_MENU.price),
-      description: json.description || '',
-      imageUrl: DEFAULT_DAILY_MENU.imageUrl,
-      allowLargeRice: true
-    });
-  } catch {
-    return { ...DEFAULT_DAILY_MENU };
-  }
+if (!json.ok || !json.found) return null;
+if (json.visible === false) return null;
+if (String(json.isHidden || '').toLowerCase() === 'true') return null;
+if (String(json.hidden || '').toLowerCase() === 'true') return null;
+
+return withMenuDefaults({
+name: json.menuName || DEFAULT_DAILY_MENU.name,
+price: Number(json.price || DEFAULT_DAILY_MENU.price),
+description: json.description || '',
+imageUrl: json.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
+allowLargeRice: true
+});
+} catch {
+return null;
+}
 }
 
+
 function withMenuDefaults(menu) {
-  return {
-    name: menu.name || DEFAULT_DAILY_MENU.name,
-    price: Number(menu.price || DEFAULT_DAILY_MENU.price),
-    description: menu.description || '',
-    imageUrl: menu.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
-    allowLargeRice:
-      typeof menu.allowLargeRice === 'boolean'
-        ? menu.allowLargeRice
-        : DEFAULT_DAILY_MENU.allowLargeRice
-  };
+return {
+name: menu.name || DEFAULT_DAILY_MENU.name,
+price: Number(menu.price || DEFAULT_DAILY_MENU.price),
+description: menu.description || '',
+imageUrl: menu.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
+allowLargeRice:
+typeof menu.allowLargeRice === 'boolean'
+? menu.allowLargeRice
+: DEFAULT_DAILY_MENU.allowLargeRice
+};
 }
 
 async function saveReservationToSheet(reservation) {
@@ -1586,40 +1590,40 @@ async function saveReservationToSheet(reservation) {
 }
 
 async function savePendingSession(userId, session) {
-  if (!userId || !RESERVATION_SAVE_URL) return { ok: false, error: 'missing config' };
+if (!userId || !RESERVATION_SAVE_URL) return { ok: false, error: 'missing config' };
 
-  try {
-    const nowMillis = Date.now();
+try {
+const nowMillis = Date.now();
 
-    const url = buildReservationApiUrl({
-      action: 'savePending',
-      userId,
-      step: session.step || '',
-      lastActionAtMillis: String(nowMillis),
-      lastActionAt: getJstDateTimeLabel(),
-      date: normalizeYmdDate(session.date || ''),
-      time: session.time || '',
-      itemsJson: JSON.stringify(session.items || []),
-      currentSelectionJson: JSON.stringify(session.currentSelection || null),
-      name: session.name || '',
-      phone: session.phone || '',
-      availableDatesJson: JSON.stringify(
-        (session.availableDates || []).map((date) => normalizeYmdDate(date))
-      ),
-      availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
-      dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU)
-    });
+const url = buildReservationApiUrl({
+action: 'savePending',
+userId,
+step: session.step || '',
+lastActionAtMillis: String(nowMillis),
+lastActionAt: getJstDateTimeLabel(),
+date: normalizeYmdDate(session.date || ''),
+time: session.time || '',
+itemsJson: JSON.stringify(session.items || []),
+currentSelectionJson: JSON.stringify(session.currentSelection || null),
+name: session.name || '',
+phone: session.phone || '',
+availableDatesJson: JSON.stringify(
+(session.availableDates || []).map((date) => normalizeYmdDate(date))
+),
+availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
+dailyMenuJson: JSON.stringify(session.dailyMenu ?? null)
+});
 
-    const response = await fetch(url);
-    const text = await response.text();
+const response = await fetch(url);
+const text = await response.text();
 
-    if (!response.ok) return { ok: false, error: text };
+if (!response.ok) return { ok: false, error: text };
 
-    const json = JSON.parse(text);
-    return json.ok ? { ok: true } : { ok: false, error: json.error || 'savePending error' };
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
+const json = JSON.parse(text);
+return json.ok ? { ok: true } : { ok: false, error: json.error || 'savePending error' };
+} catch (err) {
+return { ok: false, error: String(err) };
+}
 }
 
 async function getPendingSession(userId) {
