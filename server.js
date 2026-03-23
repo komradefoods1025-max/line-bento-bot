@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-23-liiffix-02';
+const APP_VERSION = '2026-03-23-liiffix-03';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -248,6 +248,16 @@ async function handleEvent(event) {
       return;
     }
 
+    if (text.includes('予約日時|')) {
+      console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
+
+      const normalized = text.slice(text.indexOf('予約日時|'));
+      const [, selectedDate = '', selectedTime = ''] = normalized.split('|');
+
+      await handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime);
+      return;
+    }
+
     if (isReservationStartText(text)) {
       await beginReservationFlow(replyToken, userId);
       return;
@@ -266,16 +276,6 @@ async function handleEvent(event) {
       }
 
       await beginReservationFlow(replyToken, userId);
-      return;
-    }
-
-    if (text.includes('予約日時|')) {
-      console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
-
-      const normalized = text.slice(text.indexOf('予約日時|'));
-      const [, selectedDate = '', selectedTime = ''] = normalized.split('|');
-
-      await handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime);
       return;
     }
 
@@ -1786,11 +1786,14 @@ function isReservationStartText(text) {
   const t = normalizeIncomingText(text);
 
   if (!t) return false;
-  if (t.includes('予約')) return true;
 
-  return ['弁当', 'ランチ', 'テイクアウト'].some(
-    (keyword) => t.includes(keyword) && t.includes('したい')
-  );
+  return [
+    '予約',
+    '予約する',
+    '弁当予約',
+    'ランチ予約',
+    'テイクアウト予約'
+  ].includes(t);
 }
 
 function isResetText(text) {
