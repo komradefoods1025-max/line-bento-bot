@@ -1069,6 +1069,19 @@ function buildLargeRiceMessage(menuName) {
   };
 }
 
+function buildDrinkConfirmMessage(menuName) {
+  return {
+    type: 'text',
+    text: `${menuName}ですね。\nドリンクはお付けしますか？`,
+    quickReply: {
+      items: [
+        quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
+        quickPostbackItem('いいえ', 'action=drink_confirm&value=no', 'ドリンクは付けない')
+      ]
+    }
+  };
+}
+
 function buildQtyMessage(itemName, itemType = 'food') {
   const icon = itemType === 'drink' ? '🥤' : '🍱';
   return {
