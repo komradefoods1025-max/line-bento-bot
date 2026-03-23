@@ -21,23 +21,30 @@ const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
 
 const DAILY_MENU_KEY = 'daily_menu';
 const EXTRA_KARAAGE_KEY = 'extra_karaage';
+const DRINK_KEY_PREFIX = 'drink_';
 
 const DRINK_OPTIONS = [
   {
     key: 'irohasu',
     name: 'いろはす',
+    price: 150,
+    description: 'すっきり飲みやすいミネラルウォーター',
     imageUrl:
       'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e6b0b4-1.jpg'
   },
   {
     key: 'oolong',
     name: '烏龍茶',
+    price: 200,
+    description: '食事と相性のいい定番ドリンク',
     imageUrl:
       'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e7838fe9be8de88cb6.webp'
   },
   {
     key: 'cola',
     name: 'コーラ',
+    price: 200,
+    description: 'シュワッと爽快な人気ドリンク',
     imageUrl:
       'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e382b3e383bce383a9-1.jpg'
   }
@@ -380,6 +387,7 @@ async function handleEvent(event) {
       }
 
       session.currentSelection = {
+        itemType: 'food',
         menuKey: data.item,
         menuName: menu.name,
         price: Number(menu.price || 0),
@@ -403,7 +411,38 @@ async function handleEvent(event) {
 
       await replyMessage(replyToken, [
         textMessage(`ご注文商品：${menu.name}`),
-        buildQtyMessage(menu.name)
+        buildQtyMessage(menu.name, 'food')
+      ]);
+      return;
+    }
+
+    if (data.action === 'drink') {
+      const drink = resolveDrinkByKey(data.item || '');
+
+      if (!drink) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('ドリンクが見つかりませんでした。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      session.currentSelection = {
+        itemType: 'drink',
+        menuKey: `${DRINK_KEY_PREFIX}${drink.key}`,
+        menuName: drink.name,
+        price: Number(drink.price || 0),
+        riceSize: '',
+        allowLargeRice: false
+      };
+
+      session.step = 'waiting_qty';
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`ご注文商品：${drink.name}`),
+        buildQtyMessage(drink.name, 'drink')
       ]);
       return;
     }
@@ -428,7 +467,10 @@ async function handleEvent(event) {
 
       await replyMessage(replyToken, [
         textMessage(`${riceLabel}で承りました。`),
-        buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
+        buildQtyMessage(
+          getCurrentSelectionLabel(session.currentSelection),
+          session.currentSelection.itemType || 'food'
+        )
       ]);
       return;
     }
@@ -440,12 +482,16 @@ async function handleEvent(event) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('個数をもう一度選んでください。'),
-          buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
+          buildQtyMessage(
+            getCurrentSelectionLabel(session.currentSelection),
+            session.currentSelection?.itemType || 'food'
+          )
         ]);
         return;
       }
 
       addItemToCart(session, {
+        itemType: session.currentSelection.itemType || 'food',
         menuKey: session.currentSelection.menuKey,
         menuName: session.currentSelection.menuName,
         price: Number(session.currentSelection.price || 0),
@@ -697,7 +743,7 @@ function buildTimeMessage() {
 
 function buildMenuStepMessages(session) {
   const messages = [];
-  let intro = 'ご希望の商品をお選びください🍱';
+  let intro = 'ご希望の商品・ドリンクをお選びください🍱🥤';
 
   if (session.items.length) {
     intro +=
@@ -708,6 +754,7 @@ function buildMenuStepMessages(session) {
 
   messages.push(textMessage(intro));
   messages.push(buildMenuFlexMessage(session));
+  messages.push(buildDrinkFlexMessage());
   return messages;
 }
 
@@ -728,6 +775,17 @@ function buildMenuFlexMessage(session) {
         buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
         buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
       ]
+    }
+  };
+}
+
+function buildDrinkFlexMessage() {
+  return {
+    type: 'flex',
+    altText: 'ドリンクメニュー',
+    contents: {
+      type: 'carousel',
+      contents: DRINK_OPTIONS.map((drink) => buildDrinkBubble(drink))
     }
   };
 }
@@ -757,6 +815,15 @@ function buildMenuBubble(itemKey, menu) {
         color: '#666666',
         align: 'center',
         wrap: true
+      },
+      {
+        type: 'text',
+        text: `¥${Number(drink.price).toLocaleString('ja-JP')}`,
+        size: 'xxs',
+        color: '#16A34A',
+        align: 'center',
+        wrap: true,
+        weight: 'bold'
       }
     ]
   }));
@@ -802,7 +869,7 @@ function buildMenuBubble(itemKey, menu) {
     },
     {
       type: 'text',
-      text: 'ドリンク',
+      text: '追加できるドリンク',
       size: 'sm',
       weight: 'bold',
       margin: 'md'
@@ -851,6 +918,64 @@ function buildMenuBubble(itemKey, menu) {
   };
 }
 
+function buildDrinkBubble(drink) {
+  return {
+    type: 'bubble',
+    size: 'kilo',
+    hero: {
+      type: 'image',
+      url: drink.imageUrl,
+      size: 'full',
+      aspectRatio: '1:1',
+      aspectMode: 'cover'
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      spacing: 'sm',
+      contents: [
+        {
+          type: 'text',
+          text: drink.name,
+          weight: 'bold',
+          size: 'lg',
+          wrap: true
+        },
+        {
+          type: 'text',
+          text: `¥${Number(drink.price).toLocaleString('ja-JP')}`,
+          weight: 'bold',
+          size: 'md',
+          color: '#16A34A'
+        },
+        {
+          type: 'text',
+          text: drink.description || '',
+          size: 'sm',
+          color: '#666666',
+          wrap: true
+        }
+      ]
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'button',
+          style: 'primary',
+          action: {
+            type: 'postback',
+            label: 'このドリンクを追加',
+            data: `action=drink&item=${drink.key}`,
+            displayText: `${drink.name}を追加する`
+          }
+        }
+      ]
+    }
+  };
+}
+
 function buildLargeRiceMessage(menuName) {
   return {
     type: 'text',
@@ -864,10 +989,11 @@ function buildLargeRiceMessage(menuName) {
   };
 }
 
-function buildQtyMessage(menuName) {
+function buildQtyMessage(itemName, itemType = 'food') {
+  const icon = itemType === 'drink' ? '🥤' : '🍱';
   return {
     type: 'text',
-    text: `${menuName} の個数を選んでください🍚🍖`,
+    text: `${itemName} の個数を選んでください${icon}`,
     quickReply: {
       items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
         quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`)
@@ -887,10 +1013,10 @@ function buildCartSummaryMessage(session) {
 function buildCartActionMessage() {
   return {
     type: 'text',
-    text: '続けて商品を追加するか、注文内容を確認してください🔍',
+    text: '続けて商品やドリンクを追加するか、注文内容を確認してください🔍',
     quickReply: {
       items: [
-        quickPostbackItem('他の商品を追加', 'action=add_more', '他の商品を追加'),
+        quickPostbackItem('商品/ドリンクを追加', 'action=add_more', '商品やドリンクを追加'),
         quickPostbackItem('注文内容を確認', 'action=review_order', '注文内容を確認'),
         quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
       ]
@@ -973,7 +1099,10 @@ function buildResumeMessages(session) {
       return [
         textMessage('ご予約の続きをご案内します。'),
         textMessage(`ご注文商品：${getCurrentSelectionLabel(session.currentSelection)}`),
-        buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
+        buildQtyMessage(
+          getCurrentSelectionLabel(session.currentSelection),
+          session.currentSelection?.itemType || 'food'
+        )
       ];
 
     case 'menu_or_review':
@@ -1022,7 +1151,10 @@ function buildReminderMessages(session) {
       return [
         head,
         textMessage(`ご注文商品：${getCurrentSelectionLabel(session.currentSelection)}`),
-        buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
+        buildQtyMessage(
+          getCurrentSelectionLabel(session.currentSelection),
+          session.currentSelection?.itemType || 'food'
+        )
       ];
 
     case 'menu_or_review':
@@ -1068,6 +1200,10 @@ function resolveMenuByKey(session, key) {
   }
 
   return MENUS[key] || null;
+}
+
+function resolveDrinkByKey(key) {
+  return DRINK_OPTIONS.find((drink) => drink.key === key) || null;
 }
 
 async function loadSession(userId) {
@@ -1161,12 +1297,13 @@ function addItemToCart(session, newItem) {
   }
 
   session.items.push({
+    itemType: newItem.itemType || 'food',
     menuKey: newItem.menuKey,
     menuName: newItem.menuName,
-    price: newItem.price,
+    price: Number(newItem.price || 0),
     riceSize: newItem.riceSize || '',
-    qty: newItem.qty,
-    total: newItem.price * newItem.qty
+    qty: Number(newItem.qty || 0),
+    total: Number(newItem.price || 0) * Number(newItem.qty || 0)
   });
 }
 
