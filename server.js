@@ -1100,8 +1100,7 @@ function buildNameInputMessage() {
           'action=open_name_input',
           '名前を入力する',
           {
-            inputOption: 'openKeyboard',
-            fillInText: ''
+            inputOption: 'openKeyboard'
           }
         )
       ]
@@ -1120,8 +1119,7 @@ function buildPhoneInputMessage() {
           'action=open_phone_input',
           '電話番号を入力する',
           {
-            inputOption: 'openKeyboard',
-            fillInText: ''
+            inputOption: 'openKeyboard'
           }
         )
       ]
@@ -1345,7 +1343,10 @@ function quickPostbackItem(label, data, displayText, options = {}) {
     action.inputOption = options.inputOption;
   }
 
-  if (typeof options.fillInText === 'string') {
+  if (
+    typeof options.fillInText === 'string' &&
+    options.fillInText.trim() !== ''
+  ) {
     action.fillInText = options.fillInText;
   }
 
