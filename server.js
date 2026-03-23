@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-23-liiffix-03';
+const APP_VERSION = '2026-03-24-liiffix-04';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -405,7 +405,10 @@ async function handleEvent(event) {
         menuName: menu.name,
         price: Number(menu.price || 0),
         riceSize: '',
-        allowLargeRice: !!menu.allowLargeRice
+        allowLargeRice: !!menu.allowLargeRice,
+        drinkKey: '',
+        drinkName: '',
+        drinkPrice: 0
       };
 
       if (menu.allowLargeRice) {
@@ -415,6 +418,17 @@ async function handleEvent(event) {
         await replyMessage(replyToken, [
           textMessage(`ご注文商品：${menu.name}`),
           buildLargeRiceMessage(menu.name)
+        ]);
+        return;
+      }
+
+      if (canOfferDrinkForSelection(session.currentSelection)) {
+        session.step = 'waiting_drink_confirm';
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`ご注文商品：${menu.name}`),
+          buildDrinkConfirmMessage(menu.name)
         ]);
         return;
       }
@@ -441,13 +455,30 @@ async function handleEvent(event) {
         return;
       }
 
+      if (session.step === 'waiting_drink_menu' && session.currentSelection) {
+        session.currentSelection.drinkKey = `${DRINK_KEY_PREFIX}${drink.key}`;
+        session.currentSelection.drinkName = drink.name;
+        session.currentSelection.drinkPrice = Number(drink.price || 0);
+        session.step = 'waiting_qty';
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`ドリンク：${drink.name} を付けます。`),
+          buildQtyMessage(getCurrentSelectionLabel(session.currentSelection), 'food')
+        ]);
+        return;
+      }
+
       session.currentSelection = {
         itemType: 'drink',
         menuKey: `${DRINK_KEY_PREFIX}${drink.key}`,
         menuName: drink.name,
         price: Number(drink.price || 0),
         riceSize: '',
-        allowLargeRice: false
+        allowLargeRice: false,
+        drinkKey: '',
+        drinkName: '',
+        drinkPrice: 0
       };
 
       session.step = 'waiting_qty';
@@ -472,14 +503,64 @@ async function handleEvent(event) {
       }
 
       session.currentSelection.riceSize = data.value === 'yes' ? '大盛り' : '普通';
-      session.step = 'waiting_qty';
-      await savePendingSession(userId, session);
 
       const riceLabel =
         session.currentSelection.riceSize === '大盛り' ? 'ご飯大盛り' : 'ご飯普通';
 
+      if (canOfferDrinkForSelection(session.currentSelection)) {
+        session.step = 'waiting_drink_confirm';
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`${riceLabel}で承りました。`),
+          buildDrinkConfirmMessage(session.currentSelection.menuName)
+        ]);
+        return;
+      }
+
+      session.step = 'waiting_qty';
+      await savePendingSession(userId, session);
+
       await replyMessage(replyToken, [
         textMessage(`${riceLabel}で承りました。`),
+        buildQtyMessage(
+          getCurrentSelectionLabel(session.currentSelection),
+          session.currentSelection.itemType || 'food'
+        )
+      ]);
+      return;
+    }
+
+    if (data.action === 'drink_confirm') {
+      if (!session.currentSelection) {
+        session.step = 'waiting_menu';
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('もう一度商品を選んでください。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      if (data.value === 'yes') {
+        session.step = 'waiting_drink_menu';
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage('付けるドリンクを選んでください🥤'),
+          buildDrinkFlexMessage()
+        ]);
+        return;
+      }
+
+      session.currentSelection.drinkKey = '';
+      session.currentSelection.drinkName = '';
+      session.currentSelection.drinkPrice = 0;
+      session.step = 'waiting_qty';
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage('ドリンクなしで承りました。'),
         buildQtyMessage(
           getCurrentSelectionLabel(session.currentSelection),
           session.currentSelection.itemType || 'food'
@@ -503,22 +584,39 @@ async function handleEvent(event) {
         return;
       }
 
+      const selection = { ...session.currentSelection };
+
       addItemToCart(session, {
-        itemType: session.currentSelection.itemType || 'food',
-        menuKey: session.currentSelection.menuKey,
-        menuName: session.currentSelection.menuName,
-        price: Number(session.currentSelection.price || 0),
-        riceSize: session.currentSelection.riceSize || '',
+        itemType: selection.itemType || 'food',
+        menuKey: selection.menuKey,
+        menuName: selection.menuName,
+        price: Number(selection.price || 0),
+        riceSize: selection.riceSize || '',
         qty
       });
 
-      const addedName = getCurrentSelectionLabel(session.currentSelection);
+      const addedMessages = [
+        textMessage(`${getCurrentSelectionLabel(selection)} を ${qty}個 追加しました。`)
+      ];
+
+      if (selection.drinkKey && selection.drinkName) {
+        addItemToCart(session, {
+          itemType: 'drink',
+          menuKey: selection.drinkKey,
+          menuName: selection.drinkName,
+          price: Number(selection.drinkPrice || 0),
+          riceSize: '',
+          qty
+        });
+        addedMessages.push(textMessage(`${selection.drinkName} を ${qty}個 追加しました。`));
+      }
+
       session.currentSelection = null;
       session.step = 'menu_or_review';
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
-        textMessage(`${addedName} を ${qty}個 追加しました。`),
+        ...addedMessages,
         buildCartSummaryMessage(session),
         buildCartActionMessage()
       ]);
@@ -821,39 +919,6 @@ function buildMenuBubble(itemKey, menu) {
   const displayText =
     itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
 
-  const drinkImageBoxes = DRINK_OPTIONS.map((drink) => ({
-    type: 'box',
-    layout: 'vertical',
-    flex: 1,
-    spacing: 'xs',
-    contents: [
-      {
-        type: 'image',
-        url: drink.imageUrl,
-        size: 'full',
-        aspectMode: 'cover',
-        aspectRatio: '1:1'
-      },
-      {
-        type: 'text',
-        text: drink.name,
-        size: 'xxs',
-        color: '#666666',
-        align: 'center',
-        wrap: true
-      },
-      {
-        type: 'text',
-        text: `¥${Number(drink.price).toLocaleString('ja-JP')}`,
-        size: 'xxs',
-        color: '#16A34A',
-        align: 'center',
-        wrap: true,
-        weight: 'bold'
-      }
-    ]
-  }));
-
   const bodyContents = [
     {
       type: 'text',
@@ -888,26 +953,15 @@ function buildMenuBubble(itemKey, menu) {
     });
   }
 
-  bodyContents.push(
-    {
-      type: 'separator',
-      margin: 'md'
-    },
-    {
+  if (itemKey !== EXTRA_KARAAGE_KEY) {
+    bodyContents.push({
       type: 'text',
-      text: '追加できるドリンク',
-      size: 'sm',
-      weight: 'bold',
-      margin: 'md'
-    },
-    {
-      type: 'box',
-      layout: 'horizontal',
-      spacing: 'sm',
-      margin: 'sm',
-      contents: drinkImageBoxes
-    }
-  );
+      text: 'ドリンク追加OK',
+      size: 'xs',
+      color: '#2563EB',
+      wrap: true
+    });
+  }
 
   return {
     type: 'bubble',
@@ -1039,10 +1093,10 @@ function buildCartSummaryMessage(session) {
 function buildCartActionMessage() {
   return {
     type: 'text',
-    text: '続けて商品やドリンクを追加するか、注文内容を確認してください🔍',
+    text: '続けて商品を追加するか、注文内容を確認してください🔍',
     quickReply: {
       items: [
-        quickPostbackItem('商品/ドリンクを追加', 'action=add_more', '商品やドリンクを追加'),
+        quickPostbackItem('商品を追加', 'action=add_more', '商品を追加'),
         quickPostbackItem('注文内容を確認', 'action=review_order', '注文内容を確認'),
         quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
       ]
@@ -1121,6 +1175,19 @@ function buildResumeMessages(session) {
         buildLargeRiceMessage(session.currentSelection?.menuName || '商品')
       ];
 
+    case 'waiting_drink_confirm':
+      return [
+        textMessage('ご予約の続きをご案内します。'),
+        buildDrinkConfirmMessage(session.currentSelection?.menuName || '商品')
+      ];
+
+    case 'waiting_drink_menu':
+      return [
+        textMessage('ご予約の続きをご案内します。'),
+        textMessage('付けるドリンクを選んでください🥤'),
+        buildDrinkFlexMessage()
+      ];
+
     case 'waiting_qty':
       return [
         textMessage('ご予約の続きをご案内します。'),
@@ -1172,6 +1239,12 @@ function buildReminderMessages(session) {
 
     case 'waiting_rice_size':
       return [head, buildLargeRiceMessage(session.currentSelection?.menuName || '商品')];
+
+    case 'waiting_drink_confirm':
+      return [head, buildDrinkConfirmMessage(session.currentSelection?.menuName || '商品')];
+
+    case 'waiting_drink_menu':
+      return [head, textMessage('付けるドリンクを選んでください🥤'), buildDrinkFlexMessage()];
 
     case 'waiting_qty':
       return [
@@ -1271,6 +1344,13 @@ function clearSession(userId) {
   });
 }
 
+function canOfferDrinkForSelection(selection) {
+  if (!selection) return false;
+  if (selection.itemType !== 'food') return false;
+  if (!selection.menuKey) return false;
+  return selection.menuKey !== EXTRA_KARAAGE_KEY;
+}
+
 function restoreSessionFromPending(pending) {
   const items = safeJsonParse(pending.itemsJson, []);
   const currentSelection = safeJsonParse(pending.currentSelectionJson, null);
@@ -1331,6 +1411,35 @@ function addItemToCart(session, newItem) {
     qty: Number(newItem.qty || 0),
     total: Number(newItem.price || 0) * Number(newItem.qty || 0)
   });
+}
+
+function getLargeRiceQty(items) {
+  return (items || []).reduce((sum, item) => {
+    if ((item.riceSize || '') === '大盛り') {
+      return sum + Number(item.qty || 0);
+    }
+    return sum;
+  }, 0);
+}
+
+function hasDrinkItems(items) {
+  return (items || []).some(
+    (item) => item.itemType === 'drink' || String(item.menuKey || '').startsWith(DRINK_KEY_PREFIX)
+  );
+}
+
+function formatFoodLines(items) {
+  const foods = (items || []).filter(
+    (item) => !(item.itemType === 'drink' || String(item.menuKey || '').startsWith(DRINK_KEY_PREFIX))
+  );
+  return formatOrderLines(foods);
+}
+
+function formatDrinkLines(items) {
+  const drinks = (items || []).filter(
+    (item) => item.itemType === 'drink' || String(item.menuKey || '').startsWith(DRINK_KEY_PREFIX)
+  );
+  return formatOrderLines(drinks);
 }
 
 function formatOrderLines(items) {
@@ -1424,6 +1533,12 @@ function withMenuDefaults(menu) {
 
 async function saveReservationToSheet(reservation) {
   try {
+    const orderLines = formatOrderLines(reservation.items);
+    const foodLines = formatFoodLines(reservation.items);
+    const drinkLines = formatDrinkLines(reservation.items);
+    const largeRiceQty = getLargeRiceQty(reservation.items);
+    const hasDrink = hasDrinkItems(reservation.items);
+
     const url = buildReservationApiUrl({
       reservationNo: reservation.reservationNo,
       date: reservation.date,
@@ -1436,7 +1551,13 @@ async function saveReservationToSheet(reservation) {
       itemCount: String(reservation.itemCount),
       totalQty: String(reservation.totalQty),
       total: String(reservation.total),
-      itemsJson: JSON.stringify(reservation.items)
+      itemsJson: JSON.stringify(reservation.items),
+      orderLines,
+      foodLines,
+      drinkLines,
+      hasDrink: hasDrink ? 'yes' : 'no',
+      hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
+      largeRiceQty: String(largeRiceQty)
     });
 
     const response = await fetch(url);
@@ -1656,7 +1777,7 @@ async function notifyStoreByLine(reservation) {
             `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
             `合計個数：${reservation.totalQty}個\n` +
             `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-            `お名前：${reservation.name}\n` +
+            `お名前：${reservation.name}様\n` +
             `電話番号：${reservation.phone}`
         )
       ]
