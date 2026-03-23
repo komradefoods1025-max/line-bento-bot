@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
-
+const path = require('path');
+const LIFF_ID = process.env.LIFF_ID || '';
 const app = express();
 
 const PORT = process.env.PORT || 10000;
@@ -1385,5 +1386,17 @@ function utcDateFromYmd(ymd) {
 }
 
 app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+});
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/liff-config', (req, res) => {
+  res.json({
+    liffId: LIFF_ID,
+    bookableDateCount: BOOKABLE_DATE_COUNT,
+    storeName: STORE_NAME
+  });
+});
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
