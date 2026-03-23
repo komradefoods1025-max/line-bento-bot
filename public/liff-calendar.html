@@ -7,85 +7,134 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
       background: #f6f7f9;
       color: #222;
     }
+
     .wrap {
-      max-width: 720px;
+      max-width: 760px;
       margin: 0 auto;
       padding: 16px;
     }
+
     .card {
       background: #fff;
       border-radius: 18px;
       padding: 16px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
     }
+
     .title {
       font-size: 22px;
       font-weight: 700;
       margin-bottom: 6px;
     }
+
     .sub {
       font-size: 13px;
       color: #666;
       margin-bottom: 16px;
+      line-height: 1.6;
     }
+
+    .status {
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      background: #f3f4f6;
+      color: #444;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.error {
+      background: #fff1f2;
+      color: #b42318;
+      border: 1px solid #fecdd3;
+    }
+
     .step {
       display: flex;
       gap: 8px;
       margin-bottom: 14px;
       flex-wrap: wrap;
     }
+
     .step span {
       padding: 6px 10px;
       border-radius: 999px;
       background: #eef1f5;
       font-size: 12px;
     }
+
     .step .active {
       background: #06c755;
       color: #fff;
     }
+
     .nav {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 8px;
       margin-bottom: 12px;
     }
+
     .nav button {
       border: none;
       background: #111;
       color: #fff;
-      padding: 8px 12px;
+      padding: 9px 12px;
       border-radius: 10px;
       cursor: pointer;
+      font-weight: 700;
     }
+
+    .nav button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
     .month-label {
       font-weight: 700;
       font-size: 18px;
+      text-align: center;
+      flex: 1;
     }
-    .weekdays, .calendar {
+
+    .weekdays,
+    .calendar {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
       gap: 8px;
     }
+
     .weekdays div {
       text-align: center;
       font-size: 12px;
       color: #777;
       padding: 4px 0;
     }
-    .day, .blank {
+
+    .day,
+    .blank {
       min-height: 62px;
       border-radius: 14px;
     }
+
     .blank {
       background: transparent;
     }
+
     .day {
       border: 1px solid #e2e6ea;
       background: #fafbfc;
@@ -95,45 +144,76 @@
       font-weight: 700;
       cursor: pointer;
       position: relative;
+      padding: 0;
+      font-size: 16px;
     }
+
     .day.disabled {
       color: #c0c4c9;
       background: #f1f3f5;
       cursor: not-allowed;
     }
+
     .day.available {
       background: #fff;
       border: 2px solid #06c75533;
     }
+
     .day.selected {
       background: #06c755;
       color: #fff;
       border-color: #06c755;
     }
+
+    .day .marker {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: #06c755;
+    }
+
+    .day.selected .marker {
+      background: #fff;
+    }
+
     .section {
       margin-top: 18px;
       padding-top: 16px;
       border-top: 1px solid #eee;
     }
+
     .hidden {
       display: none;
     }
-    .confirm-box {
-      background: #f7faf8;
-      border: 1px solid #d9efe1;
+
+    .confirm-box,
+    .final-box {
       border-radius: 14px;
       padding: 14px;
     }
+
+    .confirm-box {
+      background: #f7faf8;
+      border: 1px solid #d9efe1;
+    }
+
     .confirm-date {
       font-size: 18px;
       font-weight: 700;
       margin-bottom: 12px;
+      line-height: 1.5;
     }
+
     .btn-row {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
     }
+
     .btn {
       border: none;
       border-radius: 12px;
@@ -141,20 +221,24 @@
       font-weight: 700;
       cursor: pointer;
     }
+
     .btn-primary {
       background: #06c755;
       color: #fff;
     }
+
     .btn-secondary {
       background: #eceff3;
       color: #222;
     }
+
     .time-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       margin-top: 12px;
     }
+
     .time-btn {
       border: 1px solid #dfe4ea;
       background: #fff;
@@ -163,26 +247,39 @@
       text-align: center;
       font-weight: 700;
       cursor: pointer;
+      line-height: 1.2;
+      min-height: 54px;
     }
+
     .time-btn.selected {
       background: #06c755;
       color: #fff;
       border-color: #06c755;
     }
+
+    .time-btn small {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      opacity: 0.75;
+      font-weight: 500;
+    }
+
     .final-box {
       margin-top: 14px;
       background: #fff9ed;
       border: 1px solid #f0dfb4;
-      border-radius: 14px;
-      padding: 14px;
     }
+
     .final-box strong {
       display: block;
       margin-bottom: 8px;
     }
+
     .send-area {
       margin-top: 14px;
     }
+
     .send-area button {
       width: 100%;
       border: none;
@@ -194,17 +291,48 @@
       font-weight: 700;
       cursor: pointer;
     }
+
     .send-area button:disabled {
-      opacity: .4;
+      opacity: 0.4;
       cursor: not-allowed;
+    }
+
+    .empty-box {
+      margin-top: 16px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #f9fafb;
+      border: 1px dashed #d1d5db;
+      color: #666;
+      line-height: 1.7;
+      display: none;
+    }
+
+    .empty-box.show {
+      display: block;
     }
 
     @media (max-width: 520px) {
       .time-grid {
         grid-template-columns: repeat(2, 1fr);
       }
-      .day, .blank {
+
+      .day,
+      .blank {
         min-height: 54px;
+      }
+
+      .nav {
+        gap: 6px;
+      }
+
+      .nav button {
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+
+      .month-label {
+        font-size: 16px;
       }
     }
   </style>
@@ -215,6 +343,8 @@
       <div class="title" id="titleText">受取日時を選択</div>
       <div class="sub">ご希望の受取日と時間をお選びください</div>
 
+      <div class="status" id="statusBox"></div>
+
       <div class="step" id="stepBar">
         <span class="active">1. 日付</span>
         <span>2. 確認</span>
@@ -223,22 +353,24 @@
       </div>
 
       <div class="nav">
-        <button id="prevBtn">← 前月</button>
+        <button id="prevBtn" type="button">← 前月</button>
         <div class="month-label" id="monthLabel"></div>
-        <button id="nextBtn">次月 →</button>
+        <button id="nextBtn" type="button">次月 →</button>
       </div>
 
       <div class="weekdays">
         <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
       </div>
+
       <div class="calendar" id="calendar"></div>
+      <div class="empty-box" id="emptyBox">現在選択できる営業日がありません。</div>
 
       <div class="section hidden" id="dateConfirmSection">
         <div class="confirm-box">
           <div class="confirm-date" id="selectedDateText"></div>
           <div class="btn-row">
-            <button class="btn btn-primary" id="confirmDateBtn">この日でOK</button>
-            <button class="btn btn-secondary" id="reselectDateBtn">日付を選び直す</button>
+            <button class="btn btn-primary" id="confirmDateBtn" type="button">この日でOK</button>
+            <button class="btn btn-secondary" id="reselectDateBtn" type="button">日付を選び直す</button>
           </div>
         </div>
       </div>
@@ -254,25 +386,22 @@
         </div>
 
         <div class="send-area">
-          <button id="sendBtn" disabled>この内容で送信する</button>
+          <button id="sendBtn" type="button" disabled>この内容で送信する</button>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    const LIFF_ID = window.LIFF_ID || "YOUR_LIFF_ID";
-    const STORE_NAME = window.STORE_NAME || "かむらど";
-
-    const AVAILABLE_DATES = new Set(
-      (window.AVAILABLE_DATES || []).map(normalizeDate)
-    );
-
-    const TIME_SLOTS = window.TIME_SLOTS || [
-      "11:30", "12:00", "12:30",
-      "13:00", "13:30", "14:00",
-      "17:30", "18:00", "18:30", "19:00"
+    const DEFAULT_TIME_SLOTS = [
+      "11:30", "11:45", "12:00", "12:15", "12:30",
+      "12:45", "13:00", "13:15", "13:30"
     ];
+
+    let liffId = "";
+    let storeName = "かむらど";
+    let availableDates = new Set();
+    let timeSlots = [...DEFAULT_TIME_SLOTS];
 
     let currentDate = new Date();
     currentDate.setDate(1);
@@ -280,7 +409,20 @@
     let selectedDate = "";
     let selectedTime = "";
 
-    document.getElementById("titleText").textContent = `${STORE_NAME} 受取日時選択`;
+    const titleText = document.getElementById("titleText");
+    const statusBox = document.getElementById("statusBox");
+    const emptyBox = document.getElementById("emptyBox");
+    const monthLabel = document.getElementById("monthLabel");
+    const calendar = document.getElementById("calendar");
+    const stepBar = document.getElementById("stepBar");
+    const dateConfirmSection = document.getElementById("dateConfirmSection");
+    const timeSection = document.getElementById("timeSection");
+    const selectedDateText = document.getElementById("selectedDateText");
+    const timeSubText = document.getElementById("timeSubText");
+    const timeGrid = document.getElementById("timeGrid");
+    const finalBox = document.getElementById("finalBox");
+    const finalText = document.getElementById("finalText");
+    const sendBtn = document.getElementById("sendBtn");
 
     document.getElementById("prevBtn").addEventListener("click", () => {
       currentDate.setMonth(currentDate.getMonth() - 1);
@@ -293,25 +435,29 @@
     });
 
     document.getElementById("confirmDateBtn").addEventListener("click", () => {
-      document.getElementById("timeSection").classList.remove("hidden");
-      document.getElementById("timeSubText").textContent = `${formatDateJP(selectedDate)} の受取時間を選んでください`;
+      timeSection.classList.remove("hidden");
+      timeSubText.textContent = `${formatDateJP(selectedDate)} の受取時間を選んでください`;
       renderTimeSlots();
       setStep(3);
+      hideStatus();
     });
 
     document.getElementById("reselectDateBtn").addEventListener("click", () => {
-      document.getElementById("dateConfirmSection").classList.add("hidden");
-      document.getElementById("timeSection").classList.add("hidden");
-      document.getElementById("finalBox").classList.add("hidden");
+      dateConfirmSection.classList.add("hidden");
+      timeSection.classList.add("hidden");
+      finalBox.classList.add("hidden");
       selectedTime = "";
-      document.getElementById("sendBtn").disabled = true;
+      sendBtn.disabled = true;
       setStep(1);
+      hideStatus();
     });
 
-    document.getElementById("sendBtn").addEventListener("click", async () => {
+    sendBtn.addEventListener("click", async () => {
       if (!selectedDate || !selectedTime) return;
 
       try {
+        sendBtn.disabled = true;
+        showStatus("送信しています…");
         await liff.sendMessages([
           {
             type: "text",
@@ -320,54 +466,101 @@
         ]);
         liff.closeWindow();
       } catch (err) {
-        alert("送信に失敗しました: " + (err?.message || err));
+        showStatus(`送信に失敗しました。${err?.message || err}`, true);
+        sendBtn.disabled = false;
       }
     });
 
-    async function initLiff() {
-      await liff.init({ liffId: LIFF_ID });
-      renderCalendar();
+    async function initPage() {
+      try {
+        showStatus("営業日を読み込んでいます…");
+        const config = await fetchConfig();
+
+        liffId = config.liffId || "";
+        storeName = config.storeName || "かむらど";
+        availableDates = new Set(
+          (Array.isArray(config.availableDates) ? config.availableDates : [])
+            .map(normalizeDate)
+            .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
+        );
+        timeSlots =
+          Array.isArray(config.pickupTimes) && config.pickupTimes.length
+            ? config.pickupTimes
+            : [...DEFAULT_TIME_SLOTS];
+
+        titleText.textContent = `${storeName} 受取日時選択`;
+
+        if (!liffId) {
+          throw new Error("LIFF_ID が設定されていません。");
+        }
+
+        await liff.init({ liffId });
+        renderCalendar();
+
+        if (!availableDates.size) {
+          emptyBox.classList.add("show");
+          showStatus("現在選択できる営業日がありません。", true);
+          return;
+        }
+
+        hideStatus();
+      } catch (err) {
+        console.error(err);
+        showStatus(`初期化に失敗しました。${err?.message || err}`, true);
+      }
     }
 
-    function setStep(step) {
-      const spans = [...document.querySelectorAll("#stepBar span")];
-      spans.forEach((el, idx) => {
-        el.classList.toggle("active", idx < step);
+    async function fetchConfig() {
+      const response = await fetch("/api/liff-config", {
+        method: "GET",
+        cache: "no-store"
       });
+
+      if (!response.ok) {
+        throw new Error("設定の取得に失敗しました。");
+      }
+
+      return response.json();
     }
 
     function renderCalendar() {
-      const calendar = document.getElementById("calendar");
       calendar.innerHTML = "";
 
-      const y = currentDate.getFullYear();
-      const m = currentDate.getMonth();
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      monthLabel.textContent = `${year}年 ${month + 1}月`;
 
-      document.getElementById("monthLabel").textContent = `${y}年 ${m + 1}月`;
+      const firstDay = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
 
-      const firstDay = new Date(y, m, 1).getDay();
-      const lastDate = new Date(y, m + 1, 0).getDate();
-
-      for (let i = 0; i < firstDay; i++) {
+      for (let i = 0; i < firstDay; i += 1) {
         const blank = document.createElement("div");
         blank.className = "blank";
         calendar.appendChild(blank);
       }
 
-      for (let day = 1; day <= lastDate; day++) {
-        const dateStr = formatDateISO(new Date(y, m, day));
+      let hasAvailableThisMonth = false;
+
+      for (let day = 1; day <= lastDate; day += 1) {
+        const dateStr = formatDateISO(new Date(year, month, day));
         const cell = document.createElement("button");
         cell.type = "button";
         cell.className = "day";
-
-        const available = AVAILABLE_DATES.has(dateStr);
         cell.textContent = day;
 
-        if (!available) {
+        const isAvailable = availableDates.has(dateStr);
+
+        if (!isAvailable) {
           cell.classList.add("disabled");
           cell.disabled = true;
         } else {
+          hasAvailableThisMonth = true;
           cell.classList.add("available");
+
+          const marker = document.createElement("span");
+          marker.className = "marker";
+          cell.appendChild(marker);
+
           if (selectedDate === dateStr) {
             cell.classList.add("selected");
           }
@@ -377,30 +570,31 @@
             selectedTime = "";
             renderCalendar();
 
-            document.getElementById("dateConfirmSection").classList.remove("hidden");
-            document.getElementById("timeSection").classList.add("hidden");
-            document.getElementById("finalBox").classList.add("hidden");
-            document.getElementById("sendBtn").disabled = true;
-            document.getElementById("selectedDateText").textContent =
-              `${formatDateJP(selectedDate)} でよろしいですか？`;
+            dateConfirmSection.classList.remove("hidden");
+            timeSection.classList.add("hidden");
+            finalBox.classList.add("hidden");
+            sendBtn.disabled = true;
 
+            selectedDateText.textContent = `${formatDateJP(selectedDate)} でよろしいですか？`;
             setStep(2);
+            hideStatus();
           });
         }
 
         calendar.appendChild(cell);
       }
+
+      emptyBox.classList.toggle("show", availableDates.size === 0 || !hasAvailableThisMonth);
     }
 
     function renderTimeSlots() {
-      const timeGrid = document.getElementById("timeGrid");
       timeGrid.innerHTML = "";
 
-      TIME_SLOTS.forEach((time) => {
+      timeSlots.forEach((time) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "time-btn";
-        btn.textContent = time;
+        btn.innerHTML = `${time}<small>受取</small>`;
 
         if (selectedTime === time) {
           btn.classList.add("selected");
@@ -410,15 +604,32 @@
           selectedTime = time;
           renderTimeSlots();
 
-          document.getElementById("finalBox").classList.remove("hidden");
-          document.getElementById("finalText").textContent =
-            `${formatDateJP(selectedDate)} / ${selectedTime}`;
-          document.getElementById("sendBtn").disabled = false;
+          finalBox.classList.remove("hidden");
+          finalText.textContent = `${formatDateJP(selectedDate)} / ${selectedTime}`;
+          sendBtn.disabled = false;
           setStep(4);
+          hideStatus();
         });
 
         timeGrid.appendChild(btn);
       });
+    }
+
+    function setStep(step) {
+      const spans = [...stepBar.querySelectorAll("span")];
+      spans.forEach((el, idx) => {
+        el.classList.toggle("active", idx < step);
+      });
+    }
+
+    function showStatus(message, isError = false) {
+      statusBox.textContent = message;
+      statusBox.className = `status show${isError ? " error" : ""}`;
+    }
+
+    function hideStatus() {
+      statusBox.textContent = "";
+      statusBox.className = "status";
     }
 
     function normalizeDate(str) {
@@ -433,12 +644,12 @@
     }
 
     function formatDateJP(dateStr) {
-      const d = new Date(dateStr + "T00:00:00");
+      const date = new Date(`${dateStr}T00:00:00`);
       const week = ["日", "月", "火", "水", "木", "金", "土"];
-      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${week[d.getDay()]}）`;
+      return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${week[date.getDay()]}）`;
     }
 
-    initLiff();
+    initPage();
   </script>
 </body>
 </html>
