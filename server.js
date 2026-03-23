@@ -19,12 +19,37 @@ const BOOKABLE_DATE_COUNT = 10;
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
 
+const DAILY_MENU_KEY = 'daily_menu';
+const EXTRA_KARAAGE_KEY = 'extra_karaage';
+
+const DRINK_OPTIONS = [
+  {
+    key: 'irohasu',
+    name: 'いろはす',
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e6b0b4-1.jpg'
+  },
+  {
+    key: 'oolong',
+    name: '烏龍茶',
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e7838fe9be8de88cb6.webp'
+  },
+  {
+    key: 'cola',
+    name: 'コーラ',
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e382b3e383bce383a9-1.jpg'
+  }
+];
+
 const DEFAULT_DAILY_MENU = {
   name: '日替わり弁当',
   price: 600,
   description: 'その日のお楽しみメニューです',
   imageUrl:
-    'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg'
+    'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg',
+  allowLargeRice: true
 };
 
 const MENUS = {
@@ -33,25 +58,26 @@ const MENUS = {
     price: 700,
     description: 'ジューシーな唐揚げが人気の定番弁当',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_13-12-15.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e59490e68f9ae38192.jpeg',
+    allowLargeRice: true
   },
   shogayaki: {
     name: '生姜焼き弁当',
     price: 700,
     description: '香ばしく焼き上げたごはんが進む一品',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-13-55.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/5.png',
+    allowLargeRice: true
   },
   chicken_nanban: {
     name: 'チキン南蛮弁当',
     price: 900,
     description: 'オリジナルタルタルが美味な至極の一品',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-35-09.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/3.png',
+    allowLargeRice: true
   }
 };
-
-const EXTRA_KARAAGE_KEY = 'extra_karaage';
 
 const EXTRA_MENUS = {
   [EXTRA_KARAAGE_KEY]: {
@@ -59,7 +85,8 @@ const EXTRA_MENUS = {
     price: 80,
     description: 'お弁当に追加できる唐揚げです（1個80円）',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg',
+    allowLargeRice: false
   }
 };
 
@@ -93,7 +120,8 @@ app.get('/api/liff-config', async (_req, res) => {
       liffId: LIFF_ID,
       bookableDateCount: BOOKABLE_DATE_COUNT,
       storeName: STORE_NAME,
-      availableDates
+      availableDates,
+      pickupTimes: PICKUP_TIMES
     });
   } catch (error) {
     console.error('liff-config error:', error);
@@ -101,7 +129,8 @@ app.get('/api/liff-config', async (_req, res) => {
       liffId: LIFF_ID,
       bookableDateCount: BOOKABLE_DATE_COUNT,
       storeName: STORE_NAME,
-      availableDates: []
+      availableDates: [],
+      pickupTimes: PICKUP_TIMES
     });
   }
 });
@@ -221,6 +250,12 @@ async function handleEvent(event) {
       }
 
       await beginReservationFlow(replyToken, userId);
+      return;
+    }
+
+    if (text.startsWith('予約日時|')) {
+      const [, selectedDate = '', selectedTime = ''] = text.split('|');
+      await handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime);
       return;
     }
 
@@ -347,14 +382,53 @@ async function handleEvent(event) {
       session.currentSelection = {
         menuKey: data.item,
         menuName: menu.name,
-        price: menu.price
+        price: Number(menu.price || 0),
+        riceSize: '',
+        allowLargeRice: !!menu.allowLargeRice
       };
+
+      if (menu.allowLargeRice) {
+        session.step = 'waiting_rice_size';
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`ご注文商品：${menu.name}`),
+          buildLargeRiceMessage(menu.name)
+        ]);
+        return;
+      }
+
       session.step = 'waiting_qty';
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
         textMessage(`ご注文商品：${menu.name}`),
         buildQtyMessage(menu.name)
+      ]);
+      return;
+    }
+
+    if (data.action === 'rice_size') {
+      if (!session.currentSelection) {
+        session.step = 'waiting_menu';
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('もう一度商品を選んでください。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      session.currentSelection.riceSize = data.value === 'yes' ? '大盛り' : '普通';
+      session.step = 'waiting_qty';
+      await savePendingSession(userId, session);
+
+      const riceLabel =
+        session.currentSelection.riceSize === '大盛り' ? 'ご飯大盛り' : 'ご飯普通';
+
+      await replyMessage(replyToken, [
+        textMessage(`${riceLabel}で承りました。`),
+        buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
       ]);
       return;
     }
@@ -366,7 +440,7 @@ async function handleEvent(event) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('個数をもう一度選んでください。'),
-          buildQtyMessage(session.currentSelection?.menuName || '商品')
+          buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
         ]);
         return;
       }
@@ -374,11 +448,12 @@ async function handleEvent(event) {
       addItemToCart(session, {
         menuKey: session.currentSelection.menuKey,
         menuName: session.currentSelection.menuName,
-        price: session.currentSelection.price,
+        price: Number(session.currentSelection.price || 0),
+        riceSize: session.currentSelection.riceSize || '',
         qty
       });
 
-      const addedName = session.currentSelection.menuName;
+      const addedName = getCurrentSelectionLabel(session.currentSelection);
       session.currentSelection = null;
       session.step = 'menu_or_review';
       await savePendingSession(userId, session);
@@ -491,44 +566,9 @@ async function beginReservationFlow(replyToken, userId) {
   await savePendingSession(userId, session);
 
   await replyMessage(replyToken, [
-    textMessage(`${STORE_NAME}のランチ弁当予約です！\nカレンダーから受取日を選んでください🗓️`),
+    textMessage(`${STORE_NAME}のランチ弁当予約です！\nカレンダーから受取日と時間を選んでください🗓️`),
     createDateSelectMessage()
   ]);
-}
-
-function buildDatePickerMessage(availableDates) {
-  const dates = Array.isArray(availableDates)
-    ? availableDates.map((date) => normalizeYmdDate(date)).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-    : [];
-
-  if (!dates.length) {
-    return textMessage('選択できる日付がありません。');
-  }
-
-  const minDate = dates[0];
-  const maxDate = dates[dates.length - 1];
-  const initialDate = dates[0];
-
-  return {
-    type: 'text',
-    text: '受取日を選んでください📆',
-    quickReply: {
-      items: [
-        {
-          type: 'action',
-          action: {
-            type: 'datetimepicker',
-            label: '日付を選ぶ',
-            data: 'action=pick_date',
-            mode: 'date',
-            initial: initialDate,
-            min: minDate,
-            max: maxDate
-          }
-        }
-      ]
-    }
-  };
 }
 
 function createDateSelectMessage() {
@@ -590,6 +630,55 @@ async function handleSelectedDate(replyToken, userId, session, selectedDate) {
   ]);
 }
 
+async function handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime) {
+  const normalizedSelectedDate = normalizeYmdDate(selectedDate);
+  const normalizedSelectedTime = String(selectedTime || '').trim();
+
+  const bookingConfig = await fetchBookingConfig();
+  const availableDates =
+    bookingConfig.ok && Array.isArray(bookingConfig.dates)
+      ? bookingConfig.dates
+          .map((item) => normalizeYmdDate(item?.date))
+          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      : [];
+
+  session.availableDateOptions = Array.isArray(bookingConfig.dates)
+    ? bookingConfig.dates
+    : [];
+  session.availableDates = availableDates;
+
+  if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('その日は受付対象外です。営業日から選び直してください。'),
+      createDateSelectMessage()
+    ]);
+    return;
+  }
+
+  if (!PICKUP_TIMES.includes(normalizedSelectedTime)) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('受取時間が受付対象外です。もう一度カレンダーから選んでください。'),
+      createDateSelectMessage()
+    ]);
+    return;
+  }
+
+  session.date = normalizedSelectedDate;
+  session.time = normalizedSelectedTime;
+  session.dailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
+  session.step = 'waiting_menu';
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(
+      `受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n受取時間：${normalizedSelectedTime}`
+    ),
+    ...buildMenuStepMessages(session)
+  ]);
+}
+
 function buildTimeMessage() {
   return {
     type: 'text',
@@ -622,13 +711,18 @@ function buildMenuStepMessages(session) {
   return messages;
 }
 
-function buildMenuFlexMessage(_session) {
+function buildMenuFlexMessage(session) {
+  const dailyMenu = session?.dailyMenu?.name
+    ? session.dailyMenu
+    : DEFAULT_DAILY_MENU;
+
   return {
     type: 'flex',
     altText: 'お弁当メニュー',
     contents: {
       type: 'carousel',
       contents: [
+        buildMenuBubble(DAILY_MENU_KEY, dailyMenu),
         buildMenuBubble('karaage', MENUS.karaage),
         buildMenuBubble('shogayaki', MENUS.shogayaki),
         buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
@@ -642,6 +736,85 @@ function buildMenuBubble(itemKey, menu) {
   const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
   const displayText =
     itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
+
+  const drinkImageBoxes = DRINK_OPTIONS.map((drink) => ({
+    type: 'box',
+    layout: 'vertical',
+    flex: 1,
+    spacing: 'xs',
+    contents: [
+      {
+        type: 'image',
+        url: drink.imageUrl,
+        size: 'full',
+        aspectMode: 'cover',
+        aspectRatio: '1:1'
+      },
+      {
+        type: 'text',
+        text: drink.name,
+        size: 'xxs',
+        color: '#666666',
+        align: 'center',
+        wrap: true
+      }
+    ]
+  }));
+
+  const bodyContents = [
+    {
+      type: 'text',
+      text: menu.name,
+      weight: 'bold',
+      size: 'lg',
+      wrap: true
+    },
+    {
+      type: 'text',
+      text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
+      weight: 'bold',
+      size: 'md',
+      color: '#16A34A'
+    },
+    {
+      type: 'text',
+      text: menu.description || '',
+      size: 'sm',
+      color: '#666666',
+      wrap: true
+    }
+  ];
+
+  if (menu.allowLargeRice) {
+    bodyContents.push({
+      type: 'text',
+      text: 'ご飯大盛り対応',
+      size: 'xs',
+      color: '#B45309',
+      wrap: true
+    });
+  }
+
+  bodyContents.push(
+    {
+      type: 'separator',
+      margin: 'md'
+    },
+    {
+      type: 'text',
+      text: 'ドリンク',
+      size: 'sm',
+      weight: 'bold',
+      margin: 'md'
+    },
+    {
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      margin: 'sm',
+      contents: drinkImageBoxes
+    }
+  );
 
   return {
     type: 'bubble',
@@ -657,29 +830,7 @@ function buildMenuBubble(itemKey, menu) {
       type: 'box',
       layout: 'vertical',
       spacing: 'sm',
-      contents: [
-        {
-          type: 'text',
-          text: menu.name,
-          weight: 'bold',
-          size: 'lg',
-          wrap: true
-        },
-        {
-          type: 'text',
-          text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
-          weight: 'bold',
-          size: 'md',
-          color: '#16A34A'
-        },
-        {
-          type: 'text',
-          text: menu.description || '',
-          size: 'sm',
-          color: '#666666',
-          wrap: true
-        }
-      ]
+      contents: bodyContents
     },
     footer: {
       type: 'box',
@@ -695,6 +846,19 @@ function buildMenuBubble(itemKey, menu) {
             displayText
           }
         }
+      ]
+    }
+  };
+}
+
+function buildLargeRiceMessage(menuName) {
+  return {
+    type: 'text',
+    text: `${menuName}ですね。\nご飯の大盛りができますが、いかがですか？`,
+    quickReply: {
+      items: [
+        quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
+        quickPostbackItem('いいえ', 'action=rice_size&value=no', 'ご飯は普通にする')
       ]
     }
   };
@@ -799,11 +963,17 @@ function buildResumeMessages(session) {
     case 'waiting_menu':
       return [textMessage('ご予約の続きをご案内します。'), ...buildMenuStepMessages(session)];
 
+    case 'waiting_rice_size':
+      return [
+        textMessage('ご予約の続きをご案内します。'),
+        buildLargeRiceMessage(session.currentSelection?.menuName || '商品')
+      ];
+
     case 'waiting_qty':
       return [
         textMessage('ご予約の続きをご案内します。'),
-        textMessage(`ご注文商品：${session.currentSelection?.menuName || '商品'}`),
-        buildQtyMessage(session.currentSelection?.menuName || '商品')
+        textMessage(`ご注文商品：${getCurrentSelectionLabel(session.currentSelection)}`),
+        buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
       ];
 
     case 'menu_or_review':
@@ -845,11 +1015,14 @@ function buildReminderMessages(session) {
     case 'waiting_menu':
       return [head, ...buildMenuStepMessages(session)];
 
+    case 'waiting_rice_size':
+      return [head, buildLargeRiceMessage(session.currentSelection?.menuName || '商品')];
+
     case 'waiting_qty':
       return [
         head,
-        textMessage(`ご注文商品：${session.currentSelection?.menuName || '商品'}`),
-        buildQtyMessage(session.currentSelection?.menuName || '商品')
+        textMessage(`ご注文商品：${getCurrentSelectionLabel(session.currentSelection)}`),
+        buildQtyMessage(getCurrentSelectionLabel(session.currentSelection))
       ];
 
     case 'menu_or_review':
@@ -885,7 +1058,11 @@ function textMessage(text) {
   return { type: 'text', text };
 }
 
-function resolveMenuByKey(_session, key) {
+function resolveMenuByKey(session, key) {
+  if (key === DAILY_MENU_KEY) {
+    return session?.dailyMenu?.name ? session.dailyMenu : DEFAULT_DAILY_MENU;
+  }
+
   if (EXTRA_MENUS[key]) {
     return EXTRA_MENUS[key];
   }
@@ -946,7 +1123,7 @@ function restoreSessionFromPending(pending) {
     phone: pending.phone || '',
     items: Array.isArray(items) ? items : [],
     currentSelection: currentSelection || null,
-    dailyMenu: dailyMenu?.name ? dailyMenu : { ...DEFAULT_DAILY_MENU },
+    dailyMenu: dailyMenu?.name ? withMenuDefaults(dailyMenu) : { ...DEFAULT_DAILY_MENU },
     availableDates: Array.isArray(availableDates)
       ? availableDates
           .map((date) => normalizeYmdDate(date))
@@ -971,7 +1148,11 @@ function hasActiveSession(session) {
 }
 
 function addItemToCart(session, newItem) {
-  const existing = session.items.find((item) => item.menuKey === newItem.menuKey);
+  const existing = session.items.find(
+    (item) =>
+      item.menuKey === newItem.menuKey &&
+      (item.riceSize || '') === (newItem.riceSize || '')
+  );
 
   if (existing) {
     existing.qty += newItem.qty;
@@ -983,6 +1164,7 @@ function addItemToCart(session, newItem) {
     menuKey: newItem.menuKey,
     menuName: newItem.menuName,
     price: newItem.price,
+    riceSize: newItem.riceSize || '',
     qty: newItem.qty,
     total: newItem.price * newItem.qty
   });
@@ -994,9 +1176,22 @@ function formatOrderLines(items) {
   return items
     .map(
       (item) =>
-        `・${item.menuName} ×${item.qty}個　¥${Number(item.total).toLocaleString('ja-JP')}`
+        `・${getDisplayMenuName(item)} ×${item.qty}個　¥${Number(item.total).toLocaleString('ja-JP')}`
     )
     .join('\n');
+}
+
+function getDisplayMenuName(item) {
+  if (!item) return '商品';
+  if (item.riceSize === '大盛り') {
+    return `${item.menuName}（ご飯大盛り）`;
+  }
+  return item.menuName;
+}
+
+function getCurrentSelectionLabel(selection) {
+  if (!selection) return '商品';
+  return getDisplayMenuName(selection);
 }
 
 function getCartTotalQty(items) {
@@ -1034,20 +1229,34 @@ async function fetchDailyMenuConfig(dateStr) {
     const response = await fetch(url);
     const text = await response.text();
 
-    if (!response.ok) return DEFAULT_DAILY_MENU;
+    if (!response.ok) return { ...DEFAULT_DAILY_MENU };
 
     const json = JSON.parse(text);
-    if (!json.ok || !json.found) return DEFAULT_DAILY_MENU;
+    if (!json.ok || !json.found) return { ...DEFAULT_DAILY_MENU };
 
-    return {
+    return withMenuDefaults({
       name: json.menuName || DEFAULT_DAILY_MENU.name,
       price: Number(json.price || DEFAULT_DAILY_MENU.price),
       description: json.description || '',
-      imageUrl: DEFAULT_DAILY_MENU.imageUrl
-    };
+      imageUrl: DEFAULT_DAILY_MENU.imageUrl,
+      allowLargeRice: true
+    });
   } catch {
-    return DEFAULT_DAILY_MENU;
+    return { ...DEFAULT_DAILY_MENU };
   }
+}
+
+function withMenuDefaults(menu) {
+  return {
+    name: menu.name || DEFAULT_DAILY_MENU.name,
+    price: Number(menu.price || DEFAULT_DAILY_MENU.price),
+    description: menu.description || '',
+    imageUrl: menu.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
+    allowLargeRice:
+      typeof menu.allowLargeRice === 'boolean'
+        ? menu.allowLargeRice
+        : DEFAULT_DAILY_MENU.allowLargeRice
+  };
 }
 
 async function saveReservationToSheet(reservation) {
