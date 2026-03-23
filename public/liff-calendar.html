@@ -216,7 +216,10 @@
       selectedDate: null,
       minDate: null,
       maxDate: null,
-      config: null
+      config: null,
+      availableDates: [],
+      availableDateSet: new Set(),
+      useExactDates: false
     };
 
     function normalizeDate(date) {
@@ -246,7 +249,19 @@
       return formatIso(a) === formatIso(b);
     }
 
+    function isYmdDate(text) {
+      return /^\d{4}-\d{2}-\d{2}$/.test(String(text || "").trim());
+    }
+
+    function ymdToDate(ymd) {
+      const [y, m, d] = String(ymd).split("-").map(Number);
+      return normalizeDate(new Date(y, m - 1, d));
+    }
+
     function isSelectable(date) {
+      if (state.useExactDates) {
+        return state.availableDateSet.has(formatIso(date));
+      }
       return date >= state.minDate && date <= state.maxDate;
     }
 
@@ -254,6 +269,12 @@
       const el = document.getElementById("notice");
       el.textContent = message;
       el.classList.remove("hidden");
+    }
+
+    function hideNotice() {
+      const el = document.getElementById("notice");
+      el.textContent = "";
+      el.classList.add("hidden");
     }
 
     function updateSelectedText() {
@@ -375,25 +396,57 @@
       }
     }
 
+    function applyAvailableDates(config) {
+      const availableDates = Array.isArray(config.availableDates)
+        ? config.availableDates.filter(isYmdDate).sort()
+        : [];
+
+      if (availableDates.length > 0) {
+        state.availableDates = availableDates;
+        state.availableDateSet = new Set(availableDates);
+        state.useExactDates = true;
+        state.minDate = ymdToDate(availableDates[0]);
+        state.maxDate = ymdToDate(availableDates[availableDates.length - 1]);
+        state.currentMonthDate = new Date(
+          state.minDate.getFullYear(),
+          state.minDate.getMonth(),
+          1
+        );
+
+        document.getElementById("subText").textContent =
+          `選択できる営業日: ${availableDates[0]} ～ ${availableDates[availableDates.length - 1]}（${availableDates.length}日）`;
+
+        hideNotice();
+        return;
+      }
+
+      const today = normalizeDate(new Date());
+      const count = Number(config.bookableDateCount || 10);
+
+      state.useExactDates = false;
+      state.availableDates = [];
+      state.availableDateSet = new Set();
+      state.minDate = today;
+      state.maxDate = addDays(today, Math.max(0, count - 1));
+      state.currentMonthDate = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      document.getElementById("subText").textContent =
+        `選択できる日付: ${formatIso(state.minDate)} ～ ${formatIso(state.maxDate)}`;
+
+      showNotice("営業日データがまだ取得できていないため、連続した日付表示になっています。");
+    }
+
     async function init() {
       try {
         const res = await fetch("/api/liff-config");
         const config = await res.json();
         state.config = config;
 
-        const today = normalizeDate(new Date());
-        const count = Number(config.bookableDateCount || 10);
-
-        state.minDate = today;
-        state.maxDate = addDays(today, Math.max(0, count - 1));
-        state.currentMonthDate = new Date(today.getFullYear(), today.getMonth(), 1);
-
-        document.getElementById("subText").textContent =
-          `選択できる日付: ${formatIso(state.minDate)} ～ ${formatIso(state.maxDate)}`;
-
         if (!config.liffId) {
           throw new Error("LIFF_ID が未設定です");
         }
+
+        applyAvailableDates(config);
 
         await liff.init({ liffId: config.liffId });
 
