@@ -1111,19 +1111,8 @@ function buildNameInputMessage() {
 function buildPhoneInputMessage() {
   return {
     type: 'text',
-    text: '電話番号を入力してください。\n例：09012345678',
-    quickReply: {
-      items: [
-        quickPostbackItem(
-          '電話番号を入力する',
-          'action=open_phone_input',
-          '電話番号を入力する',
-          {
-            inputOption: 'openKeyboard'
-          }
-        )
-      ]
-    }
+    text: '電話番号を入力してください。
+例：09012345678'
   };
 }
 
