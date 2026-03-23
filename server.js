@@ -1120,17 +1120,28 @@ function buildCartActionMessage() {
 }
 
 function buildConfirmMessage(session) {
+  const safeDate = session?.date ? formatDateWithWeekday(session.date) : '未設定';
+  const safeTime = session?.time || '未設定';
+  const safeItems = Array.isArray(session?.items) ? session.items : [];
+  const safeOrderLines = safeItems.length
+    ? formatOrderLines(safeItems)
+    : '・商品が入っていません';
+  const safeTotalQty = safeItems.length ? getCartTotalQty(safeItems) : 0;
+  const safeTotalAmount = safeItems.length ? getCartTotalAmount(safeItems) : 0;
+  const safeName = session?.name || '';
+  const safePhone = session?.phone || '';
+
   return {
     type: 'text',
     text:
       `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください🙇\n\n` +
-      `【受取日】${formatDateWithWeekday(session.date)}\n` +
-      `【受取時間】${session.time}\n` +
-      `【ご注文内容】\n${formatOrderLines(session.items)}\n` +
-      `【合計個数】${getCartTotalQty(session.items)}個\n` +
-      `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}様\n` +
-      `【電話番号】${session.phone}`,
+      `【受取日】${safeDate}\n` +
+      `【受取時間】${safeTime}\n` +
+      `【ご注文内容】\n${safeOrderLines}\n` +
+      `【合計個数】${safeTotalQty}個\n` +
+      `【注文合計】¥${Number(safeTotalAmount).toLocaleString('ja-JP')}\n` +
+      `【お名前】${safeName}様\n` +
+      `【電話番号】${safePhone}`,
     quickReply: {
       items: [
         quickPostbackItem('予約確定', 'action=confirm', '予約確定'),
