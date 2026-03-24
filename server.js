@@ -125,6 +125,7 @@ app.get('/api/liff-config', async (_req, res) => {
             .map((item) => normalizeYmdDate(item?.date))
             .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
         : [];
+
     const availableDates = filterAvailableDatesByPickupTime(rawAvailableDates);
     const pickupTimesByDate = Object.fromEntries(
       availableDates.map((date) => [date, getAvailablePickupTimesForDate(date)])
@@ -680,7 +681,7 @@ async function handleEvent(event) {
       }
 
       const reservation = {
-                reservationNo: createReservationNo(),
+        reservationNo: createReservationNo(),
         userId,
         date: session.date,
         time: session.time,
@@ -1114,12 +1115,10 @@ function buildLargeRiceMessage(menuName) {
   };
 }
 
-
 function buildDrinkConfirmMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName}ですね。
-ドリンクはお付けしますか？`,
+    text: `${menuName}ですね。\nドリンクはお付けしますか？`,
     quickReply: {
       items: [
         quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
@@ -1228,7 +1227,7 @@ function buildReservationCompleteMessage(reservation) {
 function startGuideMessage() {
   return {
     type: 'text',
-    text: `${STORE_NAME}のランチ弁当予約です。\n「予約」と送っていただければ開始できます。`,
+    text: `${STORE_NAME}のランチ弁当予約です！\n「予約を始める」を押していただければ開始できます😊`,
     quickReply: {
       items: [quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')]
     }
@@ -1427,6 +1426,7 @@ function getSession(userId) {
   }
   return sessions.get(userId);
 }
+
 function clearSession(userId) {
   sessions.set(userId, {
     date: '',
@@ -1747,411 +1747,4 @@ async function clearPendingSession(userId) {
     const json = JSON.parse(text);
     return json.ok ? { ok: true } : { ok: false, error: json.error || 'clearPending error' };
   } catch (err) {
-    return { ok: false, error: String(err) };
-  }
-}
-
-async function fetchReminderTargets(minutes) {
-  try {
-    const url = buildReservationApiUrl({
-      action: 'getReminderTargets',
-      minutes: String(minutes)
-    });
-
-    const response = await fetch(url);
-    const text = await response.text();
-
-    if (!response.ok) return { ok: false, error: text, targets: [] };
-
-    const json = JSON.parse(text);
-    return json.ok
-      ? json
-      : { ok: false, error: json.error || 'getReminderTargets error', targets: [] };
-  } catch (err) {
-    return { ok: false, error: String(err), targets: [] };
-  }
-}
-
-async function markReminderSent(userId) {
-  try {
-    const url = buildReservationApiUrl({
-      action: 'markReminderSent',
-      userId
-    });
-
-    const response = await fetch(url);
-    const text = await response.text();
-
-    if (!response.ok) return { ok: false, error: text };
-
-    const json = JSON.parse(text);
-    return json.ok ? { ok: true } : { ok: false, error: json.error || 'markReminderSent error' };
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
-}
-
-async function runPendingReminderJob() {
-  const result = {
-    ok: true,
-    checked: 0,
-    pushed: 0,
-    skipped: 0,
-    failed: 0,
-    details: []
-  };
-
-  const targetsResult = await fetchReminderTargets(PENDING_REMINDER_MINUTES);
-
-  if (!targetsResult.ok) {
-    return {
-      ok: false,
-      error: targetsResult.error || 'failed to fetch reminder targets'
-    };
-  }
-
-  const targets = Array.isArray(targetsResult.targets) ? targetsResult.targets : [];
-  result.checked = targets.length;
-
-  for (const target of targets) {
-    const userId = target.userId || '';
-
-    if (!userId) {
-      result.skipped += 1;
-      result.details.push({ userId: '', status: 'skipped', reason: 'missing userId' });
-      continue;
-    }
-
-    try {
-      const pending = await getPendingSession(userId);
-
-      if (!pending.ok || !pending.found) {
-        result.skipped += 1;
-        result.details.push({ userId, status: 'skipped', reason: 'pending not found' });
-        continue;
-      }
-
-      const session = restoreSessionFromPending(pending);
-
-      if (!hasActiveSession(session)) {
-        result.skipped += 1;
-        result.details.push({ userId, status: 'skipped', reason: 'inactive session' });
-        continue;
-      }
-
-      const messages = buildReminderMessages(session);
-      await pushMessage(userId, messages);
-      await markReminderSent(userId);
-
-      result.pushed += 1;
-      result.details.push({ userId, status: 'pushed', step: session.step || '' });
-    } catch (err) {
-      result.failed += 1;
-      result.details.push({
-        userId,
-        status: 'failed',
-        error: err.message || String(err)
-      });
-    }
-  }
-
-  return result;
-}
-
-async function notifyStoreByLine(reservation) {
-  if (!STORE_NOTIFY_LINE_ID) return;
-
-  const response = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
-    },
-    body: JSON.stringify({
-      to: STORE_NOTIFY_LINE_ID,
-      messages: [
-        textMessage(
-          `【店舗通知：新規ランチ予約】\n\n` +
-            `受付番号：${reservation.reservationNo}\n` +
-            `受取日：${formatDateWithWeekday(reservation.date)}\n` +
-            `受取時間：${reservation.time}\n` +
-            `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
-            `合計個数：${reservation.totalQty}個\n` +
-            `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-            `お名前：${reservation.name}\n` +
-            `電話番号：${reservation.phone}`
-        )
-      ]
-    })
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text);
-  }
-}
-
-async function replyMessage(replyToken, messages) {
-  const response = await fetch('https://api.line.me/v2/bot/message/reply', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
-    },
-    body: JSON.stringify({ replyToken, messages })
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Reply API error: ${response.status} ${text}`);
-  }
-}
-
-async function pushMessage(to, messages) {
-  const response = await fetch('https://api.line.me/v2/bot/message/push', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
-    },
-    body: JSON.stringify({ to, messages })
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Push API error: ${response.status} ${text}`);
-  }
-}
-
-function buildReservationApiUrl(params) {
-  if (!RESERVATION_SAVE_URL) {
-    throw new Error('RESERVATION_SAVE_URL is not set');
-  }
-
-  const url = new URL(RESERVATION_SAVE_URL);
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    url.searchParams.set(key, value == null ? '' : String(value));
-  });
-
-  return url.toString();
-}
-
-function verifySignature(rawBody, signature, secret) {
-  if (!secret || !signature) return false;
-
-  const hash = crypto.createHmac('SHA256', secret).update(rawBody).digest('base64');
-
-  try {
-    return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature));
-  } catch {
-    return false;
-  }
-}
-
-function parsePostbackData(data) {
-  const out = {};
-  for (const pair of data.split('&')) {
-    const [key, value = ''] = pair.split('=');
-    if (key) out[key] = decodeURIComponent(value);
-  }
-  return out;
-}
-
-function safeJsonParse(text, fallback) {
-  try {
-    const parsed = JSON.parse(text);
-    return parsed == null ? fallback : parsed;
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizePhone(text) {
-  return String(text || '')
-    .normalize('NFKC')
-    .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-    .replace(/[^\d]/g, '');
-}
-
-function isValidPhone(phone) {
-  const normalized = normalizePhone(phone);
-
-  if (!/^0\d{9,10}$/.test(normalized)) return false;
-  if (/^(\d)\1{9,10}$/.test(normalized)) return false;
-
-  if (/^(070|080|090)\d{8}$/.test(normalized)) return true;
-  if (/^050\d{8}$/.test(normalized)) return true;
-  if (/^0800\d{7}$/.test(normalized)) return true;
-  if (/^(0120|0570|0990)\d{6}$/.test(normalized)) return true;
-  if (/^0[1-9]\d{8}$/.test(normalized)) return true;
-  if (/^0[1-9]\d{9}$/.test(normalized)) return true;
-
-  return false;
-}
-
-function getNowJstDateLabel(now = new Date()) {
-  const parts = getJstParts(now);
-  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
-}
-
-function filterAvailableDatesByPickupTime(dates, now = new Date()) {
-  return (dates || []).filter((date) => getAvailablePickupTimesForDate(date, now).length > 0);
-}
-
-function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
-  const normalizedDate = normalizeYmdDate(dateStr);
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
-    return [...PICKUP_TIMES];
-  }
-
-  const todayJst = getNowJstDateLabel(now);
-
-  if (normalizedDate !== todayJst) {
-    return [...PICKUP_TIMES];
-  }
-
-  const threshold = new Date(now.getTime() + SAME_DAY_LEAD_MINUTES * 60 * 1000);
-
-  return PICKUP_TIMES.filter((time) => {
-    const pickupDateTime = jstDateTimeToUtcDate(normalizedDate, time);
-    return pickupDateTime.getTime() >= threshold.getTime();
-  });
-}
-
-function jstDateTimeToUtcDate(dateStr, timeStr) {
-  const [year, month, day] = normalizeYmdDate(dateStr).split('-').map(Number);
-  const [hour, minute] = String(timeStr || '00:00').split(':').map(Number);
-
-  return new Date(Date.UTC(year, month - 1, day, (hour || 0) - 9, minute || 0, 0));
-}
-
-function isReservationComplete(session) {
-  return !!(
-    session.date &&
-    session.time &&
-    session.items.length &&
-    session.name &&
-    session.phone
-  );
-}
-
-function normalizeWebhookText(text) {
-  return String(text || '')
-    .normalize('NFKC')
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .trim();
-}
-
-function normalizeIncomingText(text) {
-  return String(text || '')
-    .normalize('NFKC')
-    .replace(/\s+/g, '')
-    .replace(/[！!？?。．、,，]/g, '')
-    .trim();
-}
-
-function normalizeYmdDate(value) {
-  return String(value || '').replace(/\s+/g, '').trim();
-}
-
-function isReservationStartText(text) {
-  const t = normalizeIncomingText(text);
-
-  if (!t) return false;
-
-  return [
-    '予約',
-    '予約する',
-    '弁当予約',
-    'ランチ予約',
-    'テイクアウト予約'
-  ].includes(t);
-}
-
-function isResetText(text) {
-  const t = normalizeIncomingText(text);
-  return ['最初から', 'やり直し', 'リセット'].includes(t);
-}
-
-function isReviewText(text) {
-  const t = normalizeIncomingText(text);
-  return ['注文確認', '注文内容確認', '確認'].includes(t);
-}
-
-function isResumeText(text) {
-  const t = normalizeIncomingText(text);
-  return ['続き', '再開', '続ける'].includes(t);
-}
-
-function isNotifyIdText(text) {
-  const t = normalizeIncomingText(text);
-  return t === '通知先ID';
-}
-
-function createReservationNo() {
-  const parts = getJstParts();
-  return `${STORE_CODE}-${pad2(parts.month)}${pad2(parts.day)}-${pad2(parts.hour)}${pad2(parts.minute)}${pad2(parts.second)}`;
-}
-
-function getJstDateTimeLabel() {
-  const parts = getJstParts();
-  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)} ${pad2(parts.hour)}:${pad2(parts.minute)}:${pad2(parts.second)}`;
-}
-
-function getJstParts(date = new Date()) {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-
-  const map = {};
-  for (const part of formatter.formatToParts(date)) {
-    if (part.type !== 'literal') {
-            map[part.type] = part.value;
-    }
-  }
-
-  return {
-    year: Number(map.year),
-    month: Number(map.month),
-    day: Number(map.day),
-    hour: Number(map.hour),
-    minute: Number(map.minute),
-    second: Number(map.second)
-  };
-}
-
-function pad2(value) {
-  return String(value).padStart(2, '0');
-}
-
-function formatDateWithWeekday(dateStr) {
-  return `${dateStr}（${getWeekdayJa(dateStr)}）`;
-}
-
-function getWeekdayJa(dateStr) {
-  const date = utcDateFromYmd(dateStr);
-  return new Intl.DateTimeFormat('ja-JP', {
-    weekday: 'short',
-    timeZone: 'UTC'
-  }).format(date);
-}
-
-function utcDateFromYmd(ymd) {
-  const [year, month, day] = normalizeYmdDate(ymd).split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[BOOT ${APP_VERSION}] Server running on port ${PORT}`);
-  console.log(`[BOOT ${APP_VERSION}] file=${__filename}`);
-  console.log(`[BOOT ${APP_VERSION}] cwd=${process.cwd()}`);
-});
+    return { ok
