@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-24-liiffix-06';
+const APP_VERSION = '2026-03-24-liiffix-07';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -109,7 +109,25 @@ const PICKUP_TIMES = [
   '12:45',
   '13:00',
   '13:15',
-  '13:30'
+  '13:30',
+  '13:45',
+  '14:00',
+  '14:15',
+  '14:30',
+  '14:45',
+  '15:00',
+  '15:15',
+  '15:30',
+  '15:45',
+  '16:00',
+  '16:15',
+  '16:30',
+  '16:45',
+  '17:00',
+  '17:15',
+  '17:30',
+  '17:45',
+  '18:00'
 ];
 
 const sessions = new Map();
@@ -747,7 +765,6 @@ async function beginReservationFlow(replyToken, userId) {
   await savePendingSession(userId, session);
 
   await replyMessage(replyToken, [
-    textMessage(`${STORE_NAME}のランチ弁当予約です！\nカレンダーから受取日と時間を選んでください🗓️`),
     createDateSelectMessage()
   ]);
 }
@@ -1104,7 +1121,7 @@ function buildDrinkBubble(drink) {
 function buildLargeRiceMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName}ですね。\nご飯の大盛りができますが、いかがですか？`,
+    text: `${menuName}ですね！\nご飯の大盛りが無料でできます！いかがですか🤔？`,
     quickReply: {
       items: [
         quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
@@ -1117,7 +1134,7 @@ function buildLargeRiceMessage(menuName) {
 function buildDrinkConfirmMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName}ですね。\nドリンクはお付けしますか？`,
+    text: `${menuName}ですね！\nドリンクはお付けしますか🤔？`,
     quickReply: {
       items: [
         quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
@@ -1226,7 +1243,7 @@ function buildReservationCompleteMessage(reservation) {
 function startGuideMessage() {
   return {
     type: 'text',
-    text: `${STORE_NAME}のランチ弁当予約です！\n「予約を始める」を押していただければ開始できます😊`,
+    text: `${STORE_NAME}のランチ弁当予約です！\n「予約を始める」と送っていただければ開始できます😊`,
     quickReply: {
       items: [quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')]
     }
