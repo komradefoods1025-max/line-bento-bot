@@ -961,7 +961,7 @@ function buildMenuBubble(itemKey, menu) {
   if (menu.allowLargeRice) {
     bodyContents.push({
       type: 'text',
-      text: 'ご飯大盛り対応',
+      text: 'ご飯大盛り無料',
       size: 'xs',
       color: '#B45309',
       wrap: true
