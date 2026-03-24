@@ -1226,7 +1226,7 @@ function buildReservationCompleteMessage(reservation) {
 function startGuideMessage() {
   return {
     type: 'text',
-    text: `${STORE_NAME}のランチ弁当予約です。\n「予約」と送っていただければ開始できます。`,
+    text: `${STORE_NAME}のランチ弁当予約です！\n「予約を始める」を押していただければ開始できます😊`,
     quickReply: {
       items: [quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')]
     }
