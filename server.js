@@ -27,6 +27,13 @@ const CANCEL_ACTION = 'cancel_reservation';
 const BACK_DISPLAY_TEXT = '一つ前に戻る';
 const CANCEL_DISPLAY_TEXT = 'キャンセルする';
 
+const CHANGE_DATE_ACTION = 'change_date';
+const CHANGE_TIME_ACTION = 'change_time';
+const CHANGE_NAME_ACTION = 'change_name';
+const CHANGE_PHONE_ACTION = 'change_phone';
+const CHANGE_REVIEW_ACTION = 'change_review';
+const CHANGE_CONFIRM_ACTION = 'change_confirm';
+
 const DAILY_MENU_KEY = 'daily_menu';
 const EXTRA_KARAAGE_KEY = 'extra_karaage';
 const DRINK_KEY_PREFIX = 'drink_';
@@ -279,6 +286,16 @@ async function handleEvent(event) {
       return;
     }
 
+    if (isReservationViewText(text)) {
+      await handleViewLatestReservation(replyToken, userId);
+      return;
+    }
+
+    if (isReservationChangeText(text)) {
+      await beginReservationChangeFlow(replyToken, userId);
+      return;
+    }
+
     if (isReservationStartText(text)) {
       await beginReservationFlow(replyToken, userId);
       return;
@@ -311,6 +328,11 @@ async function handleEvent(event) {
     }
 
     if (session.step === 'waiting_date' && isYmdDate(text)) {
+      await handleSelectedDate(replyToken, userId, session, text);
+      return;
+    }
+
+    if (session.step === 'change_waiting_date' && isYmdDate(text)) {
       await handleSelectedDate(replyToken, userId, session, text);
       return;
     }
@@ -370,6 +392,43 @@ async function handleEvent(event) {
       return;
     }
 
+    if (session.step === 'change_waiting_name') {
+      transitionSession(session, 'change_menu', { name: text });
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`お名前を変更しました：${text}`),
+        buildChangeCurrentSummaryMessage(session),
+        buildChangeMenuMessage()
+      ]);
+      return;
+    }
+
+    if (session.step === 'change_waiting_phone') {
+      const phone = normalizePhone(text);
+
+      if (!isValidPhone(phone)) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(
+            '電話番号の形式が正しくありません。\n国内の電話番号を入力してください。\n例：09012345678 または 0312345678'
+          ),
+          buildChangePhoneInputMessage()
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'change_menu', { phone });
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`電話番号を変更しました：${phone}`),
+        buildChangeCurrentSummaryMessage(session),
+        buildChangeMenuMessage()
+      ]);
+      return;
+    }
+
     if (hasActiveSession(session)) {
       await savePendingSession(userId, session);
       await replyMessage(replyToken, buildResumeMessages(session));
@@ -385,6 +444,11 @@ async function handleEvent(event) {
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
       await beginReservationFlow(replyToken, userId);
+      return;
+    }
+
+    if (data.action === 'begin_change') {
+      await beginReservationChangeFlow(replyToken, userId);
       return;
     }
 
@@ -406,6 +470,54 @@ async function handleEvent(event) {
       return;
     }
 
+    if (data.action === CHANGE_DATE_ACTION) {
+      transitionSession(session, 'change_waiting_date');
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [
+        textMessage('変更後の受取日を選んでください。'),
+        createDateSelectMessage()
+      ]);
+      return;
+    }
+
+    if (data.action === CHANGE_TIME_ACTION) {
+      transitionSession(session, 'change_waiting_time');
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [
+        textMessage(`変更後の受取時間を選んでください。\n現在の受取日：${formatDateWithWeekday(session.date)}`),
+        buildTimeMessage(session.date)
+      ]);
+      return;
+    }
+
+    if (data.action === CHANGE_NAME_ACTION) {
+      transitionSession(session, 'change_waiting_name');
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [buildChangeNameInputMessage()]);
+      return;
+    }
+
+    if (data.action === CHANGE_PHONE_ACTION) {
+      transitionSession(session, 'change_waiting_phone');
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [buildChangePhoneInputMessage()]);
+      return;
+    }
+
+    if (data.action === CHANGE_REVIEW_ACTION) {
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [
+        buildChangeCurrentSummaryMessage(session),
+        buildChangeMenuMessage()
+      ]);
+      return;
+    }
+
+    if (data.action === CHANGE_CONFIRM_ACTION) {
+      await handleReservationChangeConfirm(replyToken, userId, session);
+      return;
+    }
+
     if (data.action === 'pick_date') {
       const selectedDate = event.postback?.params?.date || '';
       await handleSelectedDate(replyToken, userId, session, selectedDate);
@@ -423,6 +535,18 @@ async function handleEvent(event) {
             `受取時間をもう一度選んでください。\n本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降からご予約いただけます。`
           ),
           buildTimeMessage(session.date)
+        ]);
+        return;
+      }
+
+      if (session.flowType === 'change') {
+        transitionSession(session, 'change_menu', { time: selectedTime });
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`変更後の受取時間：${selectedTime}`),
+          buildChangeCurrentSummaryMessage(session),
+          buildChangeMenuMessage()
         ]);
         return;
       }
@@ -843,9 +967,25 @@ async function handleSelectedDate(replyToken, userId, session, selectedDate) {
     return;
   }
 
+  const nextDailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
+
+  if (session.flowType === 'change') {
+    transitionSession(session, 'change_waiting_time', {
+      date: normalizedSelectedDate,
+      dailyMenu: nextDailyMenu
+    });
+    await savePendingSession(userId, session);
+
+    await replyMessage(replyToken, [
+      textMessage(`変更後の受取日：${formatDateWithWeekday(normalizedSelectedDate)}`),
+      buildTimeMessage(normalizedSelectedDate)
+    ]);
+    return;
+  }
+
   transitionSession(session, 'waiting_time', {
     date: normalizedSelectedDate,
-    dailyMenu: await fetchDailyMenuConfig(normalizedSelectedDate)
+    dailyMenu: nextDailyMenu
   });
   await savePendingSession(userId, session);
 
@@ -904,10 +1044,37 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     return;
   }
 
+  const nextDailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
+
+  if (session.flowType === 'change') {
+    transitionSession(session, 'change_menu', {
+      date: normalizedSelectedDate,
+      time: normalizedSelectedTime,
+      dailyMenu: nextDailyMenu
+    });
+    await savePendingSession(userId, session);
+
+    console.log(`[LIFF DATETIME ACCEPTED ${APP_VERSION}]`, {
+      date: session.date,
+      time: session.time,
+      step: session.step,
+      flowType: session.flowType
+    });
+
+    await replyMessage(replyToken, [
+      textMessage(
+        `変更後の受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n変更後の受取時間：${normalizedSelectedTime}`
+      ),
+      buildChangeCurrentSummaryMessage(session),
+      buildChangeMenuMessage()
+    ]);
+    return;
+  }
+
   transitionSession(session, 'waiting_menu', {
     date: normalizedSelectedDate,
     time: normalizedSelectedTime,
-    dailyMenu: await fetchDailyMenuConfig(normalizedSelectedDate)
+    dailyMenu: nextDailyMenu
   });
   await savePendingSession(userId, session);
 
@@ -1159,7 +1326,7 @@ function buildLargeRiceMessage(menuName) {
     {
       type: 'text',
       text: `${menuName}ですね！
-ご飯の大盛り無料です！大盛りにしますか🍚？`,
+ご飯の大盛りは無料ですが、いかがしますか？`,
       quickReply: {
         items: [
           quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
@@ -1239,7 +1406,7 @@ function buildQtyMessage(itemName, itemType = 'food') {
   return withNavQuickReply(
     {
       type: 'text',
-      text: `${itemName} の個数を選んでください✌️${icon}`,
+      text: `${itemName} の個数を選んでください${icon}`,
       quickReply: {
         items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
           quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`)
@@ -1252,7 +1419,7 @@ function buildQtyMessage(itemName, itemType = 'food') {
 
 function buildCartSummaryMessage(session) {
   return textMessage(
-    `現在のご注文内容です🛍️\n\n${formatOrderLines(session.items)}` +
+    `現在のご注文内容です😊\n\n${formatOrderLines(session.items)}` +
       `\n合計個数：${getCartTotalQty(session.items)}個` +
       `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`
   );
@@ -1280,7 +1447,7 @@ function buildConfirmMessage(session) {
     {
       type: 'text',
       text:
-        `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください🙇
+        `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください💁‍♀️
 
 ` +
         `【受取日】${formatDateWithWeekday(session.date)}
@@ -1322,15 +1489,127 @@ function buildReservationCompleteMessage(reservation) {
   );
 }
 
+function buildLatestReservationMessage(reservation) {
+  return textMessage(
+    `現在のご予約内容です💁‍♀️\n\n` +
+      `受付番号：${reservation.reservationNo || '-'}\n` +
+      `受取日：${reservation.date ? formatDateWithWeekday(reservation.date) : '-'}\n` +
+      `受取時間：${reservation.time || '-'}\n` +
+      `ご注文内容：\n${reservation.orderLines || formatOrderLines(reservation.items || [])}\n` +
+      `合計個数：${reservation.totalQty || 0}個\n` +
+      `注文合計：¥${Number(reservation.total || 0).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation.name || '-'}様\n` +
+      `電話番号：${reservation.phone || '-'}\n` +
+      `ステータス：${reservation.status || '-'}`
+  );
+}
+
+function buildChangeCurrentSummaryMessage(session) {
+  return textMessage(
+    `変更後の予約内容です💁‍♀️\n\n` +
+      `受付番号：${session.editingReservationNo || '-'}\n` +
+      `受取日：${session.date ? formatDateWithWeekday(session.date) : '-'}\n` +
+      `受取時間：${session.time || '-'}\n` +
+      `ご注文内容：\n${formatOrderLines(session.items || [])}\n` +
+      `合計個数：${getCartTotalQty(session.items || [])}個\n` +
+      `注文合計：¥${Number(getCartTotalAmount(session.items || [])).toLocaleString('ja-JP')}\n` +
+      `お名前：${session.name || '-'}様\n` +
+      `電話番号：${session.phone || '-'}\n` +
+      `ステータス：変更受付中`
+  );
+}
+
+function buildChangeMenuMessage() {
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: '変更したい項目をお選びください💁‍♀️',
+      quickReply: {
+        items: [
+          quickPostbackItem('受取日を変更', `action=${CHANGE_DATE_ACTION}`, '受取日を変更'),
+          quickPostbackItem('受取時間を変更', `action=${CHANGE_TIME_ACTION}`, '受取時間を変更'),
+          quickPostbackItem('名前を変更', `action=${CHANGE_NAME_ACTION}`, '名前を変更'),
+          quickPostbackItem('電話番号を変更', `action=${CHANGE_PHONE_ACTION}`, '電話番号を変更'),
+          quickPostbackItem('変更内容確認', `action=${CHANGE_REVIEW_ACTION}`, '変更内容確認'),
+          quickPostbackItem('変更確定', `action=${CHANGE_CONFIRM_ACTION}`, '変更確定')
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
+}
+
+function buildChangeNameInputMessage() {
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: '変更後のお名前をご入力してください👤',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '名前を入力する',
+            'action=open_name_input',
+            '名前を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
+}
+
+function buildChangePhoneInputMessage() {
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: `変更後の電話番号をご入力してください🤙\n例：09012345678`,
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '電話番号を入力する',
+            'action=open_phone_input',
+            '電話番号を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
+}
+
+function buildReservationChangedMessage(reservation) {
+  return textMessage(
+    `予約変更を受け付けました✨\n\n` +
+      `受付番号：${reservation.reservationNo}\n` +
+      `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+      `受取時間：${reservation.time}\n` +
+      `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
+      `合計個数：${reservation.totalQty}個\n` +
+      `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation.name}様\n` +
+      `電話番号：${reservation.phone}\n` +
+      `ステータス：${reservation.status}`
+  );
+}
+
 function startGuideMessage() {
   return {
     type: 'text',
-    text: `${STORE_NAME}の\nお弁当予約フォームです！\n「予約を始める」を押していただければ開始できます😊`,
+    text: `${STORE_NAME}のお弁当予約フォームです！\n「予約を始める」を押していただければ開始できます😊`,
     quickReply: {
       items: [quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')]
     }
   };
 }
+
 function buildResumeMessages(session) {
   switch (session.step) {
     case 'waiting_date':
@@ -1399,6 +1678,24 @@ function buildResumeMessages(session) {
     case 'confirm':
       return [buildConfirmMessage(session)];
 
+    case 'change_menu':
+      return [buildChangeCurrentSummaryMessage(session), buildChangeMenuMessage()];
+
+    case 'change_waiting_date':
+      return [textMessage('変更後の受取日を選んでください📆'), createDateSelectMessage()];
+
+    case 'change_waiting_time':
+      return [
+        textMessage(`変更後の受取時間を選んでください⏰\n現在の受取日📆：${formatDateWithWeekday(session.date)}`),
+        buildTimeMessage(session.date)
+      ];
+
+    case 'change_waiting_name':
+      return [buildChangeNameInputMessage()];
+
+    case 'change_waiting_phone':
+      return [buildChangePhoneInputMessage()];
+
     default:
       return [startGuideMessage()];
   }
@@ -1406,7 +1703,7 @@ function buildResumeMessages(session) {
 
 function buildReminderMessages(session) {
   const head = textMessage(
-    'ご注文を続けますか？\n5分以上操作がなかったため、続きからご案内します。'
+    'ご注文を続けますか🤔？\n5分以上操作がなかったため、続きからご案内します。'
   );
 
   switch (session.step) {
@@ -1449,6 +1746,25 @@ function buildReminderMessages(session) {
 
     case 'confirm':
       return [head, buildConfirmMessage(session)];
+
+    case 'change_menu':
+      return [head, buildChangeCurrentSummaryMessage(session), buildChangeMenuMessage()];
+
+    case 'change_waiting_date':
+      return [head, textMessage('変更後の受取日を選んでください📆'), createDateSelectMessage()];
+
+    case 'change_waiting_time':
+      return [
+        head,
+        textMessage(`変更後の受取時間を選んでください⏰\n現在の受取日📆：${formatDateWithWeekday(session.date)}`),
+        buildTimeMessage(session.date)
+      ];
+
+    case 'change_waiting_name':
+      return [head, buildChangeNameInputMessage()];
+
+    case 'change_waiting_phone':
+      return [head, buildChangePhoneInputMessage()];
 
     default:
       return [head, startGuideMessage()];
@@ -1586,6 +1902,9 @@ function createEmptySession() {
     availableDates: [],
     availableDateOptions: [],
     history: [],
+    flowType: 'new',
+    editingReservationNo: '',
+    editingStatus: '',
     step: ''
   };
 }
@@ -1607,6 +1926,9 @@ function createSessionSnapshot(session) {
     availableDateOptions: Array.isArray(session?.availableDateOptions)
       ? session.availableDateOptions
       : [],
+    flowType: session?.flowType || 'new',
+    editingReservationNo: session?.editingReservationNo || '',
+    editingStatus: session?.editingStatus || '',
     step: session?.step || ''
   });
 }
@@ -1680,6 +2002,9 @@ function restoreSessionFromPending(pending) {
       : [],
     availableDateOptions: Array.isArray(availableDateOptions) ? availableDateOptions : [],
     history: Array.isArray(historyRaw) ? historyRaw : [],
+    flowType: pending.flowType || 'new',
+    editingReservationNo: pending.editingReservationNo || '',
+    editingStatus: pending.editingStatus || '',
     step: pending.step || ''
   };
 }
@@ -1776,6 +2101,25 @@ function getCurrentSelectionLabel(selection) {
 
 function getCartTotalQty(items) {
   return (items || []).reduce((sum, item) => sum + Number(item.qty || 0), 0);
+}
+
+function reservationFromApiRow(row) {
+  const items = safeJsonParse(row.itemsJson || '[]', []);
+  return {
+    reservationNo: row.reservationNo || '',
+    userId: row.userId || '',
+    date: normalizeYmdDate(row.date || ''),
+    time: row.time || '',
+    items: Array.isArray(items) ? items : [],
+    itemCount: Number(row.itemCount || (Array.isArray(items) ? items.length : 0) || 0),
+    totalQty: Number(row.totalQty || getCartTotalQty(items) || 0),
+    total: Number(row.total || getCartTotalAmount(items) || 0),
+    name: row.name || '',
+    phone: row.phone || '',
+    status: row.status || '',
+    createdAt: row.createdAt || '',
+    orderLines: row.orderLines || formatOrderLines(items)
+  };
 }
 
 function getCartTotalAmount(items) {
@@ -1883,6 +2227,195 @@ async function saveReservationToSheet(reservation) {
   }
 }
 
+async function fetchLatestReservation(userId) {
+  try {
+    const url = buildReservationApiUrl({
+      action: 'getLatestReservation',
+      userId
+    });
+
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) return { ok: false, found: false, error: text };
+
+    const json = JSON.parse(text);
+    if (!json.ok || !json.found) {
+      return { ok: true, found: false };
+    }
+
+    return {
+      ok: true,
+      found: true,
+      reservation: reservationFromApiRow(json.reservation || json)
+    };
+  } catch (err) {
+    return { ok: false, found: false, error: String(err) };
+  }
+}
+
+async function updateReservationOnSheet(reservation) {
+  try {
+    const url = buildReservationApiUrl({
+      action: 'updateReservation',
+      reservationNo: reservation.reservationNo,
+      userId: reservation.userId,
+      date: reservation.date,
+      time: reservation.time,
+      name: reservation.name,
+      phone: reservation.phone,
+      status: reservation.status,
+      updatedAt: reservation.updatedAt,
+      itemsJson: JSON.stringify(reservation.items),
+      itemCount: String(reservation.itemCount),
+      totalQty: String(reservation.totalQty),
+      total: String(reservation.total),
+      orderLines: formatOrderLines(reservation.items),
+      foodLines: formatFoodLines(reservation.items),
+      drinkLines: formatDrinkLines(reservation.items),
+      hasDrink: hasDrinkItems(reservation.items) ? 'yes' : 'no',
+      hasLargeRice: getLargeRiceQty(reservation.items) > 0 ? 'yes' : 'no',
+      largeRiceQty: String(getLargeRiceQty(reservation.items))
+    });
+
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) return { ok: false, error: text };
+
+    const json = JSON.parse(text);
+    return json.ok ? { ok: true } : { ok: false, error: json.error || 'update error' };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+
+async function handleViewLatestReservation(replyToken, userId) {
+  const result = await fetchLatestReservation(userId);
+
+  if (!result.ok) {
+    await replyMessage(replyToken, [
+      textMessage(`予約内容の取得でエラーが起きました。\n${result.error || 'unknown error'}`)
+    ]);
+    return;
+  }
+
+  if (!result.found) {
+    await replyMessage(replyToken, [textMessage('現在確認できるご予約がありません。')]);
+    return;
+  }
+
+  await replyMessage(replyToken, [
+    buildLatestReservationMessage(result.reservation),
+    withNavQuickReply(
+      {
+        type: 'text',
+        text: '予約変更する場合は下のボタンから進めます。',
+        quickReply: {
+          items: [quickPostbackItem('予約変更', 'action=begin_change', '予約変更')]
+        }
+      },
+      { includeBack: false, includeCancel: false }
+    )
+  ]);
+}
+
+async function beginReservationChangeFlow(replyToken, userId) {
+  const latestResult = await fetchLatestReservation(userId);
+
+  if (!latestResult.ok) {
+    await replyMessage(replyToken, [
+      textMessage(`予約内容の取得でエラーが起きました。\n${latestResult.error || 'unknown error'}`)
+    ]);
+    return;
+  }
+
+  if (!latestResult.found) {
+    await replyMessage(replyToken, [textMessage('変更できるご予約が見つかりませんでした。')]);
+    return;
+  }
+
+  const bookingConfig = await fetchBookingConfig();
+  const rawAvailableDates =
+    bookingConfig.ok && Array.isArray(bookingConfig.dates)
+      ? bookingConfig.dates
+          .map((item) => normalizeYmdDate(item?.date))
+          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      : [];
+
+  const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
+  clearSession(userId);
+  const session = getSession(userId);
+  const reservation = latestResult.reservation;
+
+  Object.assign(session, {
+    flowType: 'change',
+    editingReservationNo: reservation.reservationNo,
+    editingStatus: reservation.status || '受付済み',
+    date: reservation.date,
+    time: reservation.time,
+    name: reservation.name,
+    phone: reservation.phone,
+    items: Array.isArray(reservation.items) ? reservation.items.map((item) => ({ ...item })) : [],
+    currentSelection: null,
+    dailyMenu: await fetchDailyMenuConfig(reservation.date),
+    availableDateOptions: bookingConfig.ok && Array.isArray(bookingConfig.dates) ? bookingConfig.dates : [],
+    availableDates,
+    history: [],
+    step: 'change_menu'
+  });
+
+  await savePendingSession(userId, session);
+  await replyMessage(replyToken, [
+    buildLatestReservationMessage(reservation),
+    buildChangeCurrentSummaryMessage(session),
+    buildChangeMenuMessage()
+  ]);
+}
+
+async function handleReservationChangeConfirm(replyToken, userId, session) {
+  if (!session.editingReservationNo) {
+    await replyMessage(replyToken, [textMessage('変更対象の予約が見つかりません。もう一度お試しください。')]);
+    return;
+  }
+
+  const reservation = {
+    reservationNo: session.editingReservationNo,
+    userId,
+    date: session.date,
+    time: session.time,
+    items: Array.isArray(session.items) ? session.items.map((item) => ({ ...item })) : [],
+    itemCount: Array.isArray(session.items) ? session.items.length : 0,
+    totalQty: getCartTotalQty(session.items),
+    total: getCartTotalAmount(session.items),
+    name: session.name,
+    phone: session.phone,
+    status: '変更済み',
+    updatedAt: getJstDateTimeLabel()
+  };
+
+  const saveResult = await updateReservationOnSheet(reservation);
+
+  if (!saveResult.ok) {
+    await replyMessage(replyToken, [
+      textMessage(`予約変更の保存でエラーが起きました。\n${saveResult.error || 'unknown error'}`)
+    ]);
+    return;
+  }
+
+  notifyStoreByLine({
+    ...reservation,
+    createdAt: reservation.updatedAt,
+    totalQty: reservation.totalQty,
+    total: reservation.total
+  }).catch((err) => console.error('store line notify error:', err));
+
+  clearSession(userId);
+  await clearPendingSession(userId);
+
+  await replyMessage(replyToken, [buildReservationChangedMessage(reservation)]);
+}
+
 async function savePendingSession(userId, session) {
   if (!userId || !RESERVATION_SAVE_URL) return { ok: false, error: 'missing config' };
 
@@ -1906,6 +2439,9 @@ async function savePendingSession(userId, session) {
       ),
       availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
       historyJson: JSON.stringify(session.history || []),
+      flowType: session.flowType || 'new',
+      editingReservationNo: session.editingReservationNo || '',
+      editingStatus: session.editingStatus || '',
       dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU)
     });
 
@@ -2082,14 +2618,14 @@ async function notifyStoreByLine(reservation) {
       to: STORE_NOTIFY_LINE_ID,
       messages: [
         textMessage(
-          `【店舗通知：新規ランチ予約】\n\n` +
+          `${reservation.status === '変更済み' ? '【店舗通知：予約変更】' : '【店舗通知：新規ランチ予約】'}\n\n` +
             `受付番号：${reservation.reservationNo}\n` +
             `受取日：${formatDateWithWeekday(reservation.date)}\n` +
             `受取時間：${reservation.time}\n` +
             `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
             `合計個数：${reservation.totalQty}個\n` +
             `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-            `お名前：${reservation.name}様\n` +
+            `お名前：${reservation.name}\n` +
             `電話番号：${reservation.phone}`
         )
       ]
@@ -2101,6 +2637,7 @@ async function notifyStoreByLine(reservation) {
     throw new Error(text);
   }
 }
+
 async function replyMessage(replyToken, messages) {
   const response = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -2318,6 +2855,16 @@ function isBackText(text) {
 function isCancelText(text) {
   const t = normalizeIncomingText(text);
   return ['キャンセルする', 'キャンセル', '予約キャンセル', '中止'].includes(t);
+}
+
+function isReservationViewText(text) {
+  const t = normalizeIncomingText(text);
+  return ['予約内容確認', '予約確認', '内容確認', '予約を確認'].includes(t);
+}
+
+function isReservationChangeText(text) {
+  const t = normalizeIncomingText(text);
+  return ['予約変更', '変更', '予約を変更', '予約の変更'].includes(t);
 }
 
 function isNotifyIdText(text) {
