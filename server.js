@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-24-liiffix-10';
+const APP_VERSION = '2026-03-25-liiffix-11';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -399,7 +399,7 @@ async function handleEvent(event) {
       await replyMessage(replyToken, [
         textMessage(`お名前を変更しました：${text}`),
         buildChangeCurrentSummaryMessage(session),
-        buildChangeMenuMessage()
+        buildChangeMenuMessage(session)
       ]);
       return;
     }
@@ -424,7 +424,7 @@ async function handleEvent(event) {
       await replyMessage(replyToken, [
         textMessage(`電話番号を変更しました：${phone}`),
         buildChangeCurrentSummaryMessage(session),
-        buildChangeMenuMessage()
+        buildChangeMenuMessage(session)
       ]);
       return;
     }
@@ -508,7 +508,7 @@ async function handleEvent(event) {
       await savePendingSession(userId, session);
       await replyMessage(replyToken, [
         buildChangeCurrentSummaryMessage(session),
-        buildChangeMenuMessage()
+        buildChangeMenuMessage(session)
       ]);
       return;
     }
@@ -518,14 +518,8 @@ async function handleEvent(event) {
       return;
     }
 
-    if (data.action === 'pick_date') {
-      const selectedDate = event.postback?.params?.date || '';
-      await handleSelectedDate(replyToken, userId, session, selectedDate);
-      return;
-    }
-
     if (data.action === 'time') {
-      const selectedTime = data.value || '';
+      const selectedTime = String(data.value || '').trim();
       const availableTimes = getAvailablePickupTimesForDate(session.date);
 
       if (!availableTimes.includes(selectedTime)) {
@@ -546,7 +540,7 @@ async function handleEvent(event) {
         await replyMessage(replyToken, [
           textMessage(`変更後の受取時間：${selectedTime}`),
           buildChangeCurrentSummaryMessage(session),
-          buildChangeMenuMessage()
+          buildChangeMenuMessage(session)
         ]);
         return;
       }
@@ -1066,7 +1060,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
         `変更後の受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n変更後の受取時間：${normalizedSelectedTime}`
       ),
       buildChangeCurrentSummaryMessage(session),
-      buildChangeMenuMessage()
+      buildChangeMenuMessage(session)
     ]);
     return;
   }
@@ -1506,37 +1500,226 @@ function buildLatestReservationMessage(reservation) {
 
 function buildChangeCurrentSummaryMessage(session) {
   return textMessage(
-    `変更後の予約内容です💁‍♀️\n\n` +
-      `受付番号：${session.editingReservationNo || '-'}\n` +
-      `受取日：${session.date ? formatDateWithWeekday(session.date) : '-'}\n` +
-      `受取時間：${session.time || '-'}\n` +
-      `ご注文内容：\n${formatOrderLines(session.items || [])}\n` +
-      `合計個数：${getCartTotalQty(session.items || [])}個\n` +
-      `注文合計：¥${Number(getCartTotalAmount(session.items || [])).toLocaleString('ja-JP')}\n` +
-      `お名前：${session.name || '-'}様\n` +
-      `電話番号：${session.phone || '-'}\n` +
+    `変更後の予約内容です💁‍♀️
+
+` +
+      `受付番号：${session.editingReservationNo || '-'}
+` +
+      `受取日：${session.date ? formatDateWithWeekday(session.date) : '-'}
+` +
+      `受取時間：${session.time || '-'}
+` +
+      `ご注文内容：
+${formatOrderLines(session.items || [])}
+` +
+      `合計個数：${getCartTotalQty(session.items || [])}個
+` +
+      `注文合計：¥${Number(getCartTotalAmount(session.items || [])).toLocaleString('ja-JP')}
+` +
+      `お名前：${session.name || '-'}様
+` +
+      `電話番号：${session.phone || '-'}
+` +
       `ステータス：変更受付中`
   );
 }
 
-function buildChangeMenuMessage() {
-  return withNavQuickReply(
-    {
-      type: 'text',
-      text: '変更したい項目をお選びください💁‍♀️',
-      quickReply: {
-        items: [
-          quickPostbackItem('受取日を変更', `action=${CHANGE_DATE_ACTION}`, '受取日を変更'),
-          quickPostbackItem('受取時間を変更', `action=${CHANGE_TIME_ACTION}`, '受取時間を変更'),
-          quickPostbackItem('名前を変更', `action=${CHANGE_NAME_ACTION}`, '名前を変更'),
-          quickPostbackItem('電話番号を変更', `action=${CHANGE_PHONE_ACTION}`, '電話番号を変更'),
-          quickPostbackItem('変更内容確認', `action=${CHANGE_REVIEW_ACTION}`, '変更内容確認'),
-          quickPostbackItem('変更確定', `action=${CHANGE_CONFIRM_ACTION}`, '変更確定')
+function safeChangeMenuText(value, fallback = '未設定') {
+  const text = String(value == null ? '' : value).trim();
+  return text || fallback;
+}
+
+function formatPhoneForDisplay(phone) {
+  const raw = String(phone == null ? '' : phone).replace(/[^0-9]/g, '');
+
+  if (raw.length === 11) {
+    return `${raw.slice(0, 3)}-${raw.slice(3, 7)}-${raw.slice(7)}`;
+  }
+
+  if (raw.length === 10) {
+    if (raw.startsWith('03') || raw.startsWith('06')) {
+      return `${raw.slice(0, 2)}-${raw.slice(2, 6)}-${raw.slice(6)}`;
+    }
+    return `${raw.slice(0, 3)}-${raw.slice(3, 6)}-${raw.slice(6)}`;
+  }
+
+  return safeChangeMenuText(phone, '未設定');
+}
+
+function buildChangeMenuRow(label, value, actionData, displayText) {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    spacing: 'md',
+    paddingAll: '12px',
+    margin: 'md',
+    cornerRadius: '12px',
+    borderWidth: '1px',
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    action: {
+      type: 'postback',
+      label,
+      data: actionData,
+      displayText
+    },
+    contents: [
+      {
+        type: 'box',
+        layout: 'vertical',
+        flex: 1,
+        spacing: 'xs',
+        contents: [
+          {
+            type: 'text',
+            text: label,
+            size: 'sm',
+            weight: 'bold',
+            color: '#111111'
+          },
+          {
+            type: 'text',
+            text: value,
+            size: 'sm',
+            color: '#444444',
+            wrap: true
+          }
+        ]
+      },
+      {
+        type: 'box',
+        layout: 'vertical',
+        flex: 0,
+        justifyContent: 'center',
+        contents: [
+          {
+            type: 'text',
+            text: '変更',
+            size: 'sm',
+            weight: 'bold',
+            color: '#16A34A'
+          }
         ]
       }
-    },
-    { includeBack: true, includeCancel: true }
-  );
+    ]
+  };
+}
+
+function buildChangeMenuMessage(session) {
+  return {
+    type: 'flex',
+    altText: '変更したい項目をお選びください',
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: '16px',
+        backgroundColor: '#FFFDF7',
+        contents: [
+          {
+            type: 'text',
+            text: '変更したい項目をお選びください🙋‍♀️',
+            size: 'lg',
+            weight: 'bold',
+            wrap: true,
+            color: '#111111'
+          },
+          {
+            type: 'text',
+            text: '現在の内容を確認しながら、変更したい項目をタップできます。',
+            size: 'xs',
+            color: '#666666',
+            wrap: true,
+            margin: 'sm'
+          },
+          {
+            type: 'separator',
+            margin: 'md'
+          },
+          buildChangeMenuRow(
+            '受取日',
+            session?.date ? formatDateWithWeekday(session.date) : '未設定',
+            `action=${CHANGE_DATE_ACTION}`,
+            '受取日を変更'
+          ),
+          buildChangeMenuRow(
+            '受取時間',
+            safeChangeMenuText(session?.time, '未設定'),
+            `action=${CHANGE_TIME_ACTION}`,
+            '受取時間を変更'
+          ),
+          buildChangeMenuRow(
+            'お名前',
+            session?.name ? `${session.name}様` : '未設定',
+            `action=${CHANGE_NAME_ACTION}`,
+            '名前を変更'
+          ),
+          buildChangeMenuRow(
+            '電話番号',
+            formatPhoneForDisplay(session?.phone),
+            `action=${CHANGE_PHONE_ACTION}`,
+            '電話番号を変更'
+          )
+        ]
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: '16px',
+        contents: [
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '変更内容確認',
+              data: `action=${CHANGE_REVIEW_ACTION}`,
+              displayText: '変更内容確認'
+            }
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: {
+              type: {
+              type: 'postback',
+              label: '変更確定',
+              data: `action=${CHANGE_CONFIRM_ACTION}`,
+              displayText: '変更確定'
+            }
+          },
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '一つ前に戻る',
+              data: `action=${BACK_ACTION}`,
+              displayText: BACK_DISPLAY_TEXT
+            }
+          },
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '変更をやめる',
+              data: `action=${CANCEL_ACTION}`,
+              displayText: CANCEL_DISPLAY_TEXT
+            }
+          }
+        ]
+      }
+    }
+  };
 }
 
 function buildChangeNameInputMessage() {
@@ -1679,7 +1862,7 @@ function buildResumeMessages(session) {
       return [buildConfirmMessage(session)];
 
     case 'change_menu':
-      return [buildChangeCurrentSummaryMessage(session), buildChangeMenuMessage()];
+      return [buildChangeCurrentSummaryMessage(session), buildChangeMenuMessage(session)];
 
     case 'change_waiting_date':
       return [textMessage('変更後の受取日を選んでください📆'), createDateSelectMessage()];
@@ -1748,7 +1931,7 @@ function buildReminderMessages(session) {
       return [head, buildConfirmMessage(session)];
 
     case 'change_menu':
-      return [head, buildChangeCurrentSummaryMessage(session), buildChangeMenuMessage()];
+      return [head, buildChangeCurrentSummaryMessage(session), buildChangeMenuMessage(session)];
 
     case 'change_waiting_date':
       return [head, textMessage('変更後の受取日を選んでください📆'), createDateSelectMessage()];
@@ -2369,7 +2552,7 @@ async function beginReservationChangeFlow(replyToken, userId) {
   await replyMessage(replyToken, [
     buildLatestReservationMessage(reservation),
     buildChangeCurrentSummaryMessage(session),
-    buildChangeMenuMessage()
+    buildChangeMenuMessage(session)
   ]);
 }
 
