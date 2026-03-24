@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-24-liiffix-04';
+const APP_VERSION = '2026-03-24-liiffix-06';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -20,6 +20,7 @@ const BOOKABLE_DATE_COUNT = 10;
 
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
+const SAME_DAY_LEAD_MINUTES = Number(process.env.SAME_DAY_LEAD_MINUTES || 30);
 
 const DAILY_MENU_KEY = 'daily_menu';
 const EXTRA_KARAAGE_KEY = 'extra_karaage';
@@ -118,12 +119,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/liff-config', async (_req, res) => {
   try {
     const bookingConfig = await fetchBookingConfig();
-    const availableDates =
+    const rawAvailableDates =
       bookingConfig.ok && Array.isArray(bookingConfig.dates)
         ? bookingConfig.dates
             .map((item) => normalizeYmdDate(item?.date))
             .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
         : [];
+    const availableDates = filterAvailableDatesByPickupTime(rawAvailableDates);
+    const pickupTimesByDate = Object.fromEntries(
+      availableDates.map((date) => [date, getAvailablePickupTimesForDate(date)])
+    );
 
     res.json({
       liffId: LIFF_ID,
@@ -131,6 +136,9 @@ app.get('/api/liff-config', async (_req, res) => {
       storeName: STORE_NAME,
       availableDates,
       pickupTimes: PICKUP_TIMES,
+      pickupTimesByDate,
+      sameDayLeadMinutes: SAME_DAY_LEAD_MINUTES,
+      todayJst: getNowJstDateLabel(),
       version: APP_VERSION
     });
   } catch (error) {
@@ -141,6 +149,9 @@ app.get('/api/liff-config', async (_req, res) => {
       storeName: STORE_NAME,
       availableDates: [],
       pickupTimes: PICKUP_TIMES,
+      pickupTimesByDate: {},
+      sameDayLeadMinutes: SAME_DAY_LEAD_MINUTES,
+      todayJst: getNowJstDateLabel(),
       version: APP_VERSION
     });
   }
@@ -323,7 +334,7 @@ async function handleEvent(event) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage(
-            '電話番号の形式が正しくありません。\n数字のみで入力してください。\n例：09012345678'
+            '電話番号の形式が正しくありません。\n国内の電話番号を入力してください。\n例：09012345678 または 0312345678'
           ),
           buildPhoneInputMessage()
         ]);
@@ -375,12 +386,15 @@ async function handleEvent(event) {
 
     if (data.action === 'time') {
       const selectedTime = data.value || '';
+      const availableTimes = getAvailablePickupTimesForDate(session.date);
 
-      if (!PICKUP_TIMES.includes(selectedTime)) {
+      if (!availableTimes.includes(selectedTime)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
-          textMessage('受取時間をもう一度選んでください。'),
-          buildTimeMessage()
+          textMessage(
+            `受取時間をもう一度選んでください。\n本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降からご予約いただけます。`
+          ),
+          buildTimeMessage(session.date)
         ]);
         return;
       }
@@ -666,7 +680,7 @@ async function handleEvent(event) {
       }
 
       const reservation = {
-        reservationNo: createReservationNo(),
+                reservationNo: createReservationNo(),
         userId,
         date: session.date,
         time: session.time,
@@ -709,12 +723,13 @@ async function beginReservationFlow(replyToken, userId) {
   const session = getSession(userId);
   const bookingConfig = await fetchBookingConfig();
 
-  const availableDates =
+  const rawAvailableDates =
     bookingConfig.ok && Array.isArray(bookingConfig.dates)
       ? bookingConfig.dates
           .map((item) => normalizeYmdDate(item?.date))
           .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
       : [];
+  const availableDates = filterAvailableDatesByPickupTime(rawAvailableDates);
 
   if (!bookingConfig.ok || !availableDates.length) {
     await replyMessage(replyToken, [
@@ -785,6 +800,17 @@ async function handleSelectedDate(replyToken, userId, session, selectedDate) {
     return;
   }
 
+  const availableTimes = getAvailablePickupTimesForDate(normalizedSelectedDate);
+
+  if (!availableTimes.length) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('その日の受付可能時間は終了しました。別日を選んでください。'),
+      createDateSelectMessage()
+    ]);
+    return;
+  }
+
   session.date = normalizedSelectedDate;
   session.dailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
   session.step = 'waiting_time';
@@ -792,7 +818,7 @@ async function handleSelectedDate(replyToken, userId, session, selectedDate) {
 
   await replyMessage(replyToken, [
     textMessage(`受取日：${formatDateWithWeekday(normalizedSelectedDate)}`),
-    buildTimeMessage()
+    buildTimeMessage(normalizedSelectedDate)
   ]);
 }
 
@@ -806,12 +832,13 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   });
 
   const bookingConfig = await fetchBookingConfig();
-  const availableDates =
+  const rawAvailableDates =
     bookingConfig.ok && Array.isArray(bookingConfig.dates)
       ? bookingConfig.dates
           .map((item) => normalizeYmdDate(item?.date))
           .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
       : [];
+  const availableDates = filterAvailableDatesByPickupTime(rawAvailableDates);
 
   session.availableDateOptions = Array.isArray(bookingConfig.dates)
     ? bookingConfig.dates
@@ -828,11 +855,15 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     return;
   }
 
-  if (!PICKUP_TIMES.includes(normalizedSelectedTime)) {
+  const availableTimes = getAvailablePickupTimesForDate(normalizedSelectedDate);
+
+  if (!availableTimes.includes(normalizedSelectedTime)) {
     console.log(`[LIFF DATETIME REJECTED TIME ${APP_VERSION}]`, normalizedSelectedTime);
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
-      textMessage('受取時間が受付対象外です。もう一度カレンダーから選んでください。'),
+      textMessage(
+        `受取時間が受付対象外です。\n本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降からご予約いただけます。\nもう一度カレンダーから選んでください。`
+      ),
       createDateSelectMessage()
     ]);
     return;
@@ -858,12 +889,21 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   ]);
 }
 
-function buildTimeMessage() {
+function buildTimeMessage(selectedDate = '') {
+  const availableTimes = getAvailablePickupTimesForDate(selectedDate);
+
+  if (!availableTimes.length) {
+    return textMessage('現在選べる受取時間がありません。別日を選んでください。');
+  }
+
   return {
     type: 'text',
-    text: '受取時間を選んでください⏰',
+    text:
+      selectedDate && selectedDate === getNowJstDateLabel()
+        ? `受取時間を選んでください⏰\n※本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降から選べます`
+        : '受取時間を選んでください⏰',
     quickReply: {
-      items: PICKUP_TIMES.map((time) =>
+      items: availableTimes.map((time) =>
         quickPostbackItem(
           time,
           `action=time&value=${encodeURIComponent(time)}`,
@@ -1209,7 +1249,7 @@ function buildResumeMessages(session) {
         session.date
           ? textMessage(`受取日：${formatDateWithWeekday(session.date)}`)
           : textMessage(''),
-        buildTimeMessage()
+        buildTimeMessage(session.date)
       ];
 
     case 'waiting_menu':
@@ -1278,7 +1318,7 @@ function buildReminderMessages(session) {
       return [head, createDateSelectMessage()];
 
     case 'waiting_time':
-      return [head, buildTimeMessage()];
+      return [head, buildTimeMessage(session.date)];
 
     case 'waiting_menu':
       return [head, ...buildMenuStepMessages(session)];
@@ -1387,7 +1427,6 @@ function getSession(userId) {
   }
   return sessions.get(userId);
 }
-
 function clearSession(userId) {
   sessions.set(userId, {
     date: '',
@@ -1929,11 +1968,63 @@ function safeJsonParse(text, fallback) {
 }
 
 function normalizePhone(text) {
-  return String(text).replace(/[^\d]/g, '');
+  return String(text || '')
+    .normalize('NFKC')
+    .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/[^\d]/g, '');
 }
 
 function isValidPhone(phone) {
-  return /^\d{10,11}$/.test(phone);
+  const normalized = normalizePhone(phone);
+
+  if (!/^0\d{9,10}$/.test(normalized)) return false;
+  if (/^(\d)\1{9,10}$/.test(normalized)) return false;
+
+  if (/^(070|080|090)\d{8}$/.test(normalized)) return true;
+  if (/^050\d{8}$/.test(normalized)) return true;
+  if (/^0800\d{7}$/.test(normalized)) return true;
+  if (/^(0120|0570|0990)\d{6}$/.test(normalized)) return true;
+  if (/^0[1-9]\d{8}$/.test(normalized)) return true;
+  if (/^0[1-9]\d{9}$/.test(normalized)) return true;
+
+  return false;
+}
+
+function getNowJstDateLabel(now = new Date()) {
+  const parts = getJstParts(now);
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
+}
+
+function filterAvailableDatesByPickupTime(dates, now = new Date()) {
+  return (dates || []).filter((date) => getAvailablePickupTimesForDate(date, now).length > 0);
+}
+
+function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
+  const normalizedDate = normalizeYmdDate(dateStr);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    return [...PICKUP_TIMES];
+  }
+
+  const todayJst = getNowJstDateLabel(now);
+
+  if (normalizedDate !== todayJst) {
+    return [...PICKUP_TIMES];
+  }
+
+  const threshold = new Date(now.getTime() + SAME_DAY_LEAD_MINUTES * 60 * 1000);
+
+  return PICKUP_TIMES.filter((time) => {
+    const pickupDateTime = jstDateTimeToUtcDate(normalizedDate, time);
+    return pickupDateTime.getTime() >= threshold.getTime();
+  });
+}
+
+function jstDateTimeToUtcDate(dateStr, timeStr) {
+  const [year, month, day] = normalizeYmdDate(dateStr).split('-').map(Number);
+  const [hour, minute] = String(timeStr || '00:00').split(':').map(Number);
+
+  return new Date(Date.UTC(year, month - 1, day, (hour || 0) - 9, minute || 0, 0));
 }
 
 function isReservationComplete(session) {
@@ -2024,7 +2115,7 @@ function getJstParts(date = new Date()) {
   const map = {};
   for (const part of formatter.formatToParts(date)) {
     if (part.type !== 'literal') {
-      map[part.type] = part.value;
+            map[part.type] = part.value;
     }
   }
 
