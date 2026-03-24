@@ -402,6 +402,9 @@
     let storeName = "かむらど";
     let availableDates = new Set();
     let timeSlots = [...DEFAULT_TIME_SLOTS];
+    let pickupTimesByDate = {};
+    let sameDayLeadMinutes = 30;
+    let todayJst = "";
 
     let currentDate = new Date();
     currentDate.setDate(1);
@@ -435,8 +438,18 @@
     });
 
     document.getElementById("confirmDateBtn").addEventListener("click", () => {
+      const slots = getTimeSlotsForDate(selectedDate);
+
+      if (!slots.length) {
+        timeSection.classList.add("hidden");
+        finalBox.classList.add("hidden");
+        sendBtn.disabled = true;
+        showStatus("その日の受付可能時間はありません。別日を選んでください。", true);
+        return;
+      }
+
       timeSection.classList.remove("hidden");
-      timeSubText.textContent = `${formatDateJP(selectedDate)} の受取時間を選んでください`;
+      timeSubText.textContent = buildTimeSubText(selectedDate);
       renderTimeSlots();
       setStep(3);
       hideStatus();
@@ -478,17 +491,39 @@
 
         liffId = config.liffId || "";
         storeName = config.storeName || "かむらど";
-        availableDates = new Set(
-          (Array.isArray(config.availableDates) ? config.availableDates : [])
-            .map(normalizeDate)
-            .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value))
-        );
+        sameDayLeadMinutes = Number(config.sameDayLeadMinutes || 30);
+        todayJst = normalizeDate(config.todayJst || "");
+
         timeSlots =
           Array.isArray(config.pickupTimes) && config.pickupTimes.length
             ? config.pickupTimes
             : [...DEFAULT_TIME_SLOTS];
 
+        pickupTimesByDate = normalizePickupTimesByDate(config.pickupTimesByDate || {});
+
+        const rawAvailableDates = Array.isArray(config.availableDates)
+          ? config.availableDates
+          : [];
+
+        const normalizedDates = rawAvailableDates
+          .map(normalizeDate)
+          .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+
+        const filteredDates = normalizedDates.filter((date) => {
+          return getTimeSlotsForDate(date).length > 0;
+        });
+
+        availableDates = new Set(filteredDates);
+
+        if (!availableDates.size) {
+          const datesFromPickupMap = Object.keys(pickupTimesByDate).filter((date) => {
+            return /^\d{4}-\d{2}-\d{2}$/.test(date) && getTimeSlotsForDate(date).length > 0;
+          });
+          availableDates = new Set(datesFromPickupMap);
+        }
+
         titleText.textContent = `${storeName} 受取日時選択`;
+        moveCalendarToFirstAvailableMonth();
 
         if (!liffId) {
           throw new Error("LIFF_ID が設定されていません。");
@@ -523,6 +558,31 @@
       return response.json();
     }
 
+    function normalizePickupTimesByDate(map) {
+      const out = {};
+
+      Object.entries(map || {}).forEach(([date, times]) => {
+        const normalizedDate = normalizeDate(date);
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) return;
+
+        out[normalizedDate] = Array.isArray(times)
+          ? times.map((t) => String(t || "").trim()).filter(Boolean)
+          : [];
+      });
+
+      return out;
+    }
+
+    function moveCalendarToFirstAvailableMonth() {
+      const dates = [...availableDates].sort();
+
+      if (!dates.length) return;
+
+      const [year, month] = dates[0].split("-").map(Number);
+      currentDate = new Date(year, month - 1, 1);
+    }
+
     function renderCalendar() {
       calendar.innerHTML = "";
 
@@ -548,7 +608,7 @@
         cell.className = "day";
         cell.textContent = day;
 
-        const isAvailable = availableDates.has(dateStr);
+        const isAvailable = availableDates.has(dateStr) && getTimeSlotsForDate(dateStr).length > 0;
 
         if (!isAvailable) {
           cell.classList.add("disabled");
@@ -590,7 +650,16 @@
     function renderTimeSlots() {
       timeGrid.innerHTML = "";
 
-      timeSlots.forEach((time) => {
+      const slots = getTimeSlotsForDate(selectedDate);
+
+      if (!slots.length) {
+        finalBox.classList.add("hidden");
+        sendBtn.disabled = true;
+        showStatus("この日の受付可能時間はありません。別日を選んでください。", true);
+        return;
+      }
+
+      slots.forEach((time) => {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "time-btn";
@@ -613,6 +682,30 @@
 
         timeGrid.appendChild(btn);
       });
+    }
+
+    function getTimeSlotsForDate(dateStr) {
+      const normalizedDate = normalizeDate(dateStr);
+
+      if (!normalizedDate) return [];
+
+      if (Array.isArray(pickupTimesByDate[normalizedDate])) {
+        return pickupTimesByDate[normalizedDate];
+      }
+
+      if (todayJst && normalizedDate === todayJst) {
+        return [];
+      }
+
+      return [...timeSlots];
+    }
+
+    function buildTimeSubText(dateStr) {
+      if (todayJst && normalizeDate(dateStr) === todayJst) {
+        return `${formatDateJP(dateStr)} の受取時間を選んでください（本日は現在時刻の${sameDayLeadMinutes}分後以降のみ）`;
+      }
+
+      return `${formatDateJP(dateStr)} の受取時間を選んでください`;
     }
 
     function setStep(step) {
