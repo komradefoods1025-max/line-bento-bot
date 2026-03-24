@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-24-liiffix-08';
+const APP_VERSION = '2026-03-24-liiffix-10';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -21,6 +21,11 @@ const BOOKABLE_DATE_COUNT = 10;
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
 const SAME_DAY_LEAD_MINUTES = Number(process.env.SAME_DAY_LEAD_MINUTES || 30);
+
+const BACK_ACTION = 'go_back';
+const CANCEL_ACTION = 'cancel_reservation';
+const BACK_DISPLAY_TEXT = '一つ前に戻る';
+const CANCEL_DISPLAY_TEXT = 'キャンセルする';
 
 const DAILY_MENU_KEY = 'daily_menu';
 const EXTRA_KARAAGE_KEY = 'extra_karaage';
@@ -111,35 +116,7 @@ const PICKUP_TIMES = [
   '13:15',
   '13:30',
   '13:45',
-  '14:00',
-  '14:15',
-  '14:30',
-  '14:45',
-  '15:00',
-  '15:15',
-  '15:30',
-  '15:45',
-  '16:00',
-  '16:15',
-  '16:30',
-  '16:45',
-  '17:00',
-  '17:15',
-  '17:30',
-  '17:45',
-  '18:00',
-  '18:15',
-  '18:30',
-  '18:45',
-  '19:00',
-  '19:15',
-  '19:30',
-  '19:45',
-  '20:00',
-  '20:15',
-  '20:30',
-  '20:45',
-  '21:00'
+  '14:00'
 ];
 
 const sessions = new Map();
@@ -323,6 +300,16 @@ async function handleEvent(event) {
       return;
     }
 
+    if (hasActiveSession(session) && isBackText(text)) {
+      await handleBackAction(replyToken, userId, session);
+      return;
+    }
+
+    if (hasActiveSession(session) && isCancelText(text)) {
+      await handleCancelAction(replyToken, userId);
+      return;
+    }
+
     if (session.step === 'waiting_date' && isYmdDate(text)) {
       await handleSelectedDate(replyToken, userId, session, text);
       return;
@@ -338,7 +325,7 @@ async function handleEvent(event) {
         return;
       }
 
-      session.step = 'waiting_name';
+      transitionSession(session, 'waiting_name');
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -349,8 +336,7 @@ async function handleEvent(event) {
     }
 
     if (session.step === 'waiting_name') {
-      session.name = text;
-      session.step = 'waiting_phone';
+      transitionSession(session, 'waiting_phone', { name: text });
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -374,8 +360,7 @@ async function handleEvent(event) {
         return;
       }
 
-      session.phone = phone;
-      session.step = 'confirm';
+      transitionSession(session, 'confirm', { phone });
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -411,6 +396,16 @@ async function handleEvent(event) {
       return;
     }
 
+    if (data.action === BACK_ACTION) {
+      await handleBackAction(replyToken, userId, session);
+      return;
+    }
+
+    if (data.action === CANCEL_ACTION) {
+      await handleCancelAction(replyToken, userId);
+      return;
+    }
+
     if (data.action === 'pick_date') {
       const selectedDate = event.postback?.params?.date || '';
       await handleSelectedDate(replyToken, userId, session, selectedDate);
@@ -432,8 +427,7 @@ async function handleEvent(event) {
         return;
       }
 
-      session.time = selectedTime;
-      session.step = 'waiting_menu';
+      transitionSession(session, 'waiting_menu', { time: selectedTime });
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -468,7 +462,7 @@ async function handleEvent(event) {
       };
 
       if (menu.allowLargeRice) {
-        session.step = 'waiting_rice_size';
+        transitionSession(session, 'waiting_rice_size');
         await savePendingSession(userId, session);
 
         await replyMessage(replyToken, [
@@ -479,7 +473,7 @@ async function handleEvent(event) {
       }
 
       if (canOfferDrinkForSelection(session.currentSelection)) {
-        session.step = 'waiting_drink_confirm';
+        transitionSession(session, 'waiting_drink_confirm');
         await savePendingSession(userId, session);
 
         await replyMessage(replyToken, [
@@ -489,7 +483,7 @@ async function handleEvent(event) {
         return;
       }
 
-      session.step = 'waiting_qty';
+      transitionSession(session, 'waiting_qty');
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -515,7 +509,7 @@ async function handleEvent(event) {
         session.currentSelection.drinkKey = `${DRINK_KEY_PREFIX}${drink.key}`;
         session.currentSelection.drinkName = drink.name;
         session.currentSelection.drinkPrice = Number(drink.price || 0);
-        session.step = 'waiting_qty';
+        transitionSession(session, 'waiting_qty');
         await savePendingSession(userId, session);
 
         await replyMessage(replyToken, [
@@ -537,7 +531,7 @@ async function handleEvent(event) {
         drinkPrice: 0
       };
 
-      session.step = 'waiting_qty';
+      transitionSession(session, 'waiting_qty');
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -564,7 +558,7 @@ async function handleEvent(event) {
         session.currentSelection.riceSize === '大盛り' ? 'ご飯大盛り' : 'ご飯普通';
 
       if (canOfferDrinkForSelection(session.currentSelection)) {
-        session.step = 'waiting_drink_confirm';
+        transitionSession(session, 'waiting_drink_confirm');
         await savePendingSession(userId, session);
 
         await replyMessage(replyToken, [
@@ -574,7 +568,7 @@ async function handleEvent(event) {
         return;
       }
 
-      session.step = 'waiting_qty';
+      transitionSession(session, 'waiting_qty');
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -599,11 +593,11 @@ async function handleEvent(event) {
       }
 
       if (data.value === 'yes') {
-        session.step = 'waiting_drink_menu';
+        transitionSession(session, 'waiting_drink_menu');
         await savePendingSession(userId, session);
 
         await replyMessage(replyToken, [
-          textMessage('付けるドリンクを選んでください🥤'),
+          withNavQuickReply(textMessage('付けるドリンクを選んでください🥤'), { includeBack: true, includeCancel: true }),
           buildDrinkFlexMessage()
         ]);
         return;
@@ -612,7 +606,7 @@ async function handleEvent(event) {
       session.currentSelection.drinkKey = '';
       session.currentSelection.drinkName = '';
       session.currentSelection.drinkPrice = 0;
-      session.step = 'waiting_qty';
+      transitionSession(session, 'waiting_qty');
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -667,8 +661,7 @@ async function handleEvent(event) {
         addedMessages.push(textMessage(`${selection.drinkName} を ${qty}個 追加しました！`));
       }
 
-      session.currentSelection = null;
-      session.step = 'menu_or_review';
+      transitionSession(session, 'menu_or_review', { currentSelection: null });
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -680,7 +673,7 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'add_more') {
-      session.step = 'waiting_menu';
+      transitionSession(session, 'waiting_menu');
       await savePendingSession(userId, session);
       await replyMessage(replyToken, buildMenuStepMessages(session));
       return;
@@ -696,7 +689,7 @@ async function handleEvent(event) {
         return;
       }
 
-      session.step = 'waiting_name';
+      transitionSession(session, 'waiting_name');
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
@@ -776,6 +769,7 @@ async function beginReservationFlow(replyToken, userId) {
     ? bookingConfig.dates
     : [];
   session.availableDates = availableDates;
+  session.history = [];
   session.step = 'waiting_date';
 
   await savePendingSession(userId, session);
@@ -788,27 +782,31 @@ async function beginReservationFlow(replyToken, userId) {
 
 function createDateSelectMessage() {
   if (!LIFF_ID) {
-    return textMessage(
-      '受取希望日を YYYY-MM-DD 形式で送ってください。\n例：2026-03-24'
+    return withNavQuickReply(
+      textMessage('受取希望日を YYYY-MM-DD 形式で送ってください。\n例：2026-03-24'),
+      { includeBack: true, includeCancel: true }
     );
   }
 
-  return {
-    type: 'text',
-    text: '受取希望日をカレンダーから選んでください👇',
-    quickReply: {
-      items: [
-        {
-          type: 'action',
-          action: {
-            type: 'uri',
-            label: 'カレンダーを開く',
-            uri: `https://liff.line.me/${LIFF_ID}`
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: '受取希望日をカレンダーから選んでください👇',
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: {
+              type: 'uri',
+              label: 'カレンダーを開く',
+              uri: `https://liff.line.me/${LIFF_ID}`
+            }
           }
-        }
-      ]
-    }
-  };
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function isYmdDate(text) {
@@ -845,9 +843,10 @@ async function handleSelectedDate(replyToken, userId, session, selectedDate) {
     return;
   }
 
-  session.date = normalizedSelectedDate;
-  session.dailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
-  session.step = 'waiting_time';
+  transitionSession(session, 'waiting_time', {
+    date: normalizedSelectedDate,
+    dailyMenu: await fetchDailyMenuConfig(normalizedSelectedDate)
+  });
   await savePendingSession(userId, session);
 
   await replyMessage(replyToken, [
@@ -905,10 +904,11 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     return;
   }
 
-  session.date = normalizedSelectedDate;
-  session.time = normalizedSelectedTime;
-  session.dailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
-  session.step = 'waiting_menu';
+  transitionSession(session, 'waiting_menu', {
+    date: normalizedSelectedDate,
+    time: normalizedSelectedTime,
+    dailyMenu: await fetchDailyMenuConfig(normalizedSelectedDate)
+  });
   await savePendingSession(userId, session);
 
   console.log(`[LIFF DATETIME ACCEPTED ${APP_VERSION}]`, {
@@ -929,25 +929,32 @@ function buildTimeMessage(selectedDate = '') {
   const availableTimes = getAvailablePickupTimesForDate(selectedDate);
 
   if (!availableTimes.length) {
-    return textMessage('現在選べる受取時間がありません。別日を選んでください。');
+    return withNavQuickReply(
+      textMessage('現在選べる受取時間がありません。別日を選んでください。'),
+      { includeBack: true, includeCancel: true }
+    );
   }
 
-  return {
-    type: 'text',
-    text:
-      selectedDate && selectedDate === getNowJstDateLabel()
-        ? `受取時間を選んでください⏰\n※本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降から選べます`
-        : '受取時間を選んでください⏰',
-    quickReply: {
-      items: availableTimes.map((time) =>
-        quickPostbackItem(
-          time,
-          `action=time&value=${encodeURIComponent(time)}`,
-          time
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text:
+        selectedDate && selectedDate === getNowJstDateLabel()
+          ? `受取時間を選んでください⏰
+※本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降から選べます`
+          : '受取時間を選んでください⏰',
+      quickReply: {
+        items: availableTimes.map((time) =>
+          quickPostbackItem(
+            time,
+            `action=time&value=${encodeURIComponent(time)}`,
+            time
+          )
         )
-      )
-    }
-  };
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function getVisibleBentoBubbles(session) {
@@ -973,12 +980,22 @@ function buildMenuStepMessages(session) {
 
   if (session.items.length) {
     intro +=
-      `\n\n現在のご注文\n${formatOrderLines(session.items)}` +
-      `\n合計個数：${getCartTotalQty(session.items)}個` +
-      `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
+      `
+
+現在のご注文
+${formatOrderLines(session.items)}` +
+      `
+合計個数：${getCartTotalQty(session.items)}個` +
+      `
+注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`;
   }
 
-  messages.push(textMessage(intro));
+  messages.push(
+    withNavQuickReply(textMessage(intro), {
+      includeBack: true,
+      includeCancel: true
+    })
+  );
   messages.push(buildMenuFlexMessage(session));
   return messages;
 }
@@ -1138,111 +1155,157 @@ function buildDrinkBubble(drink) {
 }
 
 function buildLargeRiceMessage(menuName) {
-  return {
-    type: 'text',
-    text: `${menuName}ですね。\nご飯の大盛りができますが、いかがですか？`,
-    quickReply: {
-      items: [
-        quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
-        quickPostbackItem('いいえ', 'action=rice_size&value=no', 'ご飯は普通にする')
-      ]
-    }
-  };
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: `${menuName}ですね！
+ご飯の大盛り無料です！大盛りにしますか🍚？`,
+      quickReply: {
+        items: [
+          quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
+          quickPostbackItem('いいえ', 'action=rice_size&value=no', 'ご飯は普通にする')
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function buildDrinkConfirmMessage(menuName) {
-  return {
-    type: 'text',
-    text: `${menuName}ですね。\nドリンクはお付けしますか？`,
-    quickReply: {
-      items: [
-        quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
-        quickPostbackItem('いいえ', 'action=drink_confirm&value=no', 'ドリンクは付けない')
-      ]
-    }
-  };
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: `${menuName}ですね！
+ドリンクはお付けしますか🥤？`,
+      quickReply: {
+        items: [
+          quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
+          quickPostbackItem('いいえ', 'action=drink_confirm&value=no', 'ドリンクは付けない')
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function buildNameInputMessage() {
-  return {
-    type: 'text',
-    text: 'ご予約名を入力してください。',
-    quickReply: {
-      items: [
-        quickPostbackItem(
-          '名前を入力する',
-          'action=open_name_input',
-          '名前を入力する',
-          {
-            inputOption: 'openKeyboard'
-          }
-        )
-      ]
-    }
-  };
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: 'ご予約名を入力してください👤',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '名前を入力する',
+            'action=open_name_input',
+            '名前を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function buildPhoneInputMessage() {
-  return {
-    type: 'text',
-    text: '電話番号を入力してください。\n例：09012345678'
-  };
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: '電話番号を入力してください🤙\n例：09012345678',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '電話番号を入力する',
+            'action=open_phone_input',
+            '電話番号を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function buildQtyMessage(itemName, itemType = 'food') {
   const icon = itemType === 'drink' ? '🥤' : '🍱';
-  return {
-    type: 'text',
-    text: `${itemName} の個数を選んでください${icon}`,
-    quickReply: {
-      items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
-        quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`)
-      )
-    }
-  };
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: `${itemName} の個数を選んでください✌️${icon}`,
+      quickReply: {
+        items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) =>
+          quickPostbackItem(`${n}個`, `action=qty&value=${n}`, `${n}個`)
+        )
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function buildCartSummaryMessage(session) {
   return textMessage(
-    `現在のご注文内容です。\n\n${formatOrderLines(session.items)}` +
+    `現在のご注文内容です🛍️\n\n${formatOrderLines(session.items)}` +
       `\n合計個数：${getCartTotalQty(session.items)}個` +
       `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`
   );
 }
 
 function buildCartActionMessage() {
-  return {
-    type: 'text',
-    text: '続けて商品を追加するか、注文内容を確認してください🔍',
-    quickReply: {
-      items: [
-        quickPostbackItem('商品を追加', 'action=add_more', '商品を追加'),
-        quickPostbackItem('注文内容を確認', 'action=review_order', '注文内容を確認'),
-        quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
-      ]
-    }
-  };
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text: '続けて商品を追加するか、注文内容を確認してください🔍',
+      quickReply: {
+        items: [
+          quickPostbackItem('商品を追加', 'action=add_more', '商品を追加'),
+          quickPostbackItem('注文内容を確認', 'action=review_order', '注文内容を確認'),
+          quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function buildConfirmMessage(session) {
-  return {
-    type: 'text',
-    text:
-      `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください🙇\n\n` +
-      `【受取日】${formatDateWithWeekday(session.date)}\n` +
-      `【受取時間】${session.time}\n` +
-      `【ご注文内容】\n${formatOrderLines(session.items)}\n` +
-      `【合計個数】${getCartTotalQty(session.items)}個\n` +
-      `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}\n` +
-      `【お名前】${session.name}様\n` +
-      `【電話番号】${session.phone}`,
-    quickReply: {
-      items: [
-        quickPostbackItem('予約確定', 'action=confirm', '予約確定'),
-        quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
-      ]
-    }
-  };
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text:
+        `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください🙇
+
+` +
+        `【受取日】${formatDateWithWeekday(session.date)}
+` +
+        `【受取時間】${session.time}
+` +
+        `【ご注文内容】
+${formatOrderLines(session.items)}
+` +
+        `【合計個数】${getCartTotalQty(session.items)}個
+` +
+        `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}
+` +
+        `【お名前】${session.name}様
+` +
+        `【電話番号】${session.phone}`,
+      quickReply: {
+        items: [
+          quickPostbackItem('予約確定', 'action=confirm', '予約確定'),
+          quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
 }
 
 function buildReservationCompleteMessage(reservation) {
@@ -1268,7 +1331,6 @@ function startGuideMessage() {
     }
   };
 }
-
 function buildResumeMessages(session) {
   switch (session.step) {
     case 'waiting_date':
@@ -1304,7 +1366,7 @@ function buildResumeMessages(session) {
     case 'waiting_drink_menu':
       return [
         textMessage('ご予約の続きをご案内します。'),
-        textMessage('付けるドリンクを選んでください🥤'),
+        withNavQuickReply(textMessage('付けるドリンクを選んでください🥤'), { includeBack: true, includeCancel: true }),
         buildDrinkFlexMessage()
       ];
 
@@ -1364,7 +1426,7 @@ function buildReminderMessages(session) {
       return [head, buildDrinkConfirmMessage(session.currentSelection?.menuName || '商品')];
 
     case 'waiting_drink_menu':
-      return [head, textMessage('付けるドリンクを選んでください🥤'), buildDrinkFlexMessage()];
+      return [head, withNavQuickReply(textMessage('付けるドリンクを選んでください🥤'), { includeBack: true, includeCancel: true }), buildDrinkFlexMessage()];
 
     case 'waiting_qty':
       return [
@@ -1405,10 +1467,7 @@ function quickPostbackItem(label, data, displayText, options = {}) {
     action.inputOption = options.inputOption;
   }
 
-  if (
-    typeof options.fillInText === 'string' &&
-    options.fillInText.trim() !== ''
-  ) {
+  if (typeof options.fillInText === 'string' && options.fillInText.length > 0) {
     action.fillInText = options.fillInText;
   }
 
@@ -1420,6 +1479,59 @@ function quickPostbackItem(label, data, displayText, options = {}) {
 
 function textMessage(text) {
   return { type: 'text', text };
+}
+
+function buildNavQuickReplyItems({ includeBack = true, includeCancel = true } = {}) {
+  const items = [];
+
+  if (includeBack) {
+    items.push(quickPostbackItem('一つ前に戻る', `action=${BACK_ACTION}`, BACK_DISPLAY_TEXT));
+  }
+
+  if (includeCancel) {
+    items.push(
+      quickPostbackItem('キャンセルする', `action=${CANCEL_ACTION}`, CANCEL_DISPLAY_TEXT)
+    );
+  }
+
+  return items;
+}
+
+function withNavQuickReply(message, options = {}) {
+  const navItems = buildNavQuickReplyItems(options);
+  const currentItems = Array.isArray(message?.quickReply?.items)
+    ? message.quickReply.items
+    : [];
+
+  return {
+    ...message,
+    quickReply: {
+      items: [...currentItems, ...navItems]
+    }
+  };
+}
+
+async function handleBackAction(replyToken, userId, session) {
+  if (!goBackSession(session)) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('これ以上戻れません。'),
+      ...buildResumeMessages(session)
+    ]);
+    return;
+  }
+
+  await savePendingSession(userId, session);
+  await replyMessage(replyToken, buildResumeMessages(session));
+}
+
+async function handleCancelAction(replyToken, userId) {
+  clearSession(userId);
+  await clearPendingSession(userId);
+  await replyMessage(replyToken, [
+    textMessage('予約をキャンセルしました。'),
+    startGuideMessage()
+  ]);
 }
 
 function resolveMenuByKey(session, key) {
@@ -1462,8 +1574,8 @@ function getSession(userId) {
   return sessions.get(userId);
 }
 
-function clearSession(userId) {
-  sessions.set(userId, {
+function createEmptySession() {
+  return {
     date: '',
     time: '',
     name: '',
@@ -1473,8 +1585,69 @@ function clearSession(userId) {
     dailyMenu: null,
     availableDates: [],
     availableDateOptions: [],
+    history: [],
     step: ''
+  };
+}
+
+function cloneSessionValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function createSessionSnapshot(session) {
+  return cloneSessionValue({
+    date: session?.date || '',
+    time: session?.time || '',
+    name: session?.name || '',
+    phone: session?.phone || '',
+    items: Array.isArray(session?.items) ? session.items : [],
+    currentSelection: session?.currentSelection || null,
+    dailyMenu: session?.dailyMenu || null,
+    availableDates: Array.isArray(session?.availableDates) ? session.availableDates : [],
+    availableDateOptions: Array.isArray(session?.availableDateOptions)
+      ? session.availableDateOptions
+      : [],
+    step: session?.step || ''
   });
+}
+
+function pushSessionHistory(session) {
+  if (!session) return;
+
+  if (!Array.isArray(session.history)) {
+    session.history = [];
+  }
+
+  session.history.push(createSessionSnapshot(session));
+
+  if (session.history.length > 30) {
+    session.history.shift();
+  }
+}
+
+function transitionSession(session, nextStep, patch = {}) {
+  pushSessionHistory(session);
+  Object.assign(session, patch || {});
+  session.step = nextStep;
+}
+
+function restoreSessionFromSnapshot(session, snapshot) {
+  const history = Array.isArray(session?.history) ? session.history : [];
+  Object.assign(session, createEmptySession(), snapshot || {}, { history });
+}
+
+function goBackSession(session) {
+  if (!session || !Array.isArray(session.history) || !session.history.length) {
+    return false;
+  }
+
+  const previous = session.history.pop();
+  restoreSessionFromSnapshot(session, previous);
+  return true;
+}
+
+function clearSession(userId) {
+  sessions.set(userId, createEmptySession());
 }
 
 function canOfferDrinkForSelection(selection) {
@@ -1490,6 +1663,7 @@ function restoreSessionFromPending(pending) {
   const availableDates = safeJsonParse(pending.availableDatesJson, []);
   const availableDateOptions = safeJsonParse(pending.availableDateOptionsJson, []);
   const dailyMenuRaw = safeJsonParse(pending.dailyMenuJson, null);
+  const historyRaw = safeJsonParse(pending.historyJson, []);
 
   return {
     date: normalizeYmdDate(pending.date || ''),
@@ -1505,6 +1679,7 @@ function restoreSessionFromPending(pending) {
           .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
       : [],
     availableDateOptions: Array.isArray(availableDateOptions) ? availableDateOptions : [],
+    history: Array.isArray(historyRaw) ? historyRaw : [],
     step: pending.step || ''
   };
 }
@@ -1730,6 +1905,7 @@ async function savePendingSession(userId, session) {
         (session.availableDates || []).map((date) => normalizeYmdDate(date))
       ),
       availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
+      historyJson: JSON.stringify(session.history || []),
       dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU)
     });
 
@@ -1913,7 +2089,7 @@ async function notifyStoreByLine(reservation) {
             `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
             `合計個数：${reservation.totalQty}個\n` +
             `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-            `お名前：${reservation.name}\n` +
+            `お名前：${reservation.name}様\n` +
             `電話番号：${reservation.phone}`
         )
       ]
@@ -1925,7 +2101,6 @@ async function notifyStoreByLine(reservation) {
     throw new Error(text);
   }
 }
-
 async function replyMessage(replyToken, messages) {
   const response = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
@@ -2133,6 +2308,16 @@ function isReviewText(text) {
 function isResumeText(text) {
   const t = normalizeIncomingText(text);
   return ['続き', '再開', '続ける'].includes(t);
+}
+
+function isBackText(text) {
+  const t = normalizeIncomingText(text);
+  return ['一つ前に戻る', '前に戻る', '戻る'].includes(t);
+}
+
+function isCancelText(text) {
+  const t = normalizeIncomingText(text);
+  return ['キャンセルする', 'キャンセル', '予約キャンセル', '中止'].includes(t);
 }
 
 function isNotifyIdText(text) {
