@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-24-liiffix-07';
+const APP_VERSION = '2026-03-24-liiffix-08';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -137,13 +137,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/liff-config', async (_req, res) => {
   try {
     const bookingConfig = await fetchBookingConfig();
+
     const rawAvailableDates =
       bookingConfig.ok && Array.isArray(bookingConfig.dates)
         ? bookingConfig.dates
             .map((item) => normalizeYmdDate(item?.date))
             .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
         : [];
-    const availableDates = filterAvailableDatesByPickupTime(rawAvailableDates);
+
+    const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
+
     const pickupTimesByDate = Object.fromEntries(
       availableDates.map((date) => [date, getAvailablePickupTimesForDate(date)])
     );
@@ -553,7 +556,7 @@ async function handleEvent(event) {
         await savePendingSession(userId, session);
 
         await replyMessage(replyToken, [
-          textMessage(`${riceLabel}で承りました。`),
+          textMessage(`${riceLabel}で承りました😊`),
           buildDrinkConfirmMessage(session.currentSelection.menuName)
         ]);
         return;
@@ -563,7 +566,7 @@ async function handleEvent(event) {
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
-        textMessage(`${riceLabel}で承りました。`),
+        textMessage(`${riceLabel}で承りました😊`),
         buildQtyMessage(
           getCurrentSelectionLabel(session.currentSelection),
           session.currentSelection.itemType || 'food'
@@ -601,7 +604,7 @@ async function handleEvent(event) {
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
-        textMessage('ドリンクなしで承りました。'),
+        textMessage('ドリンクなしで承りました😊'),
         buildQtyMessage(
           getCurrentSelectionLabel(session.currentSelection),
           session.currentSelection.itemType || 'food'
@@ -637,7 +640,7 @@ async function handleEvent(event) {
       });
 
       const addedMessages = [
-        textMessage(`${getCurrentSelectionLabel(selection)} を ${qty}個 追加しました。`)
+        textMessage(`${getCurrentSelectionLabel(selection)} を ${qty}個 追加しました！`)
       ];
 
       if (selection.drinkKey && selection.drinkName) {
@@ -649,7 +652,7 @@ async function handleEvent(event) {
           riceSize: '',
           qty
         });
-        addedMessages.push(textMessage(`${selection.drinkName} を ${qty}個 追加しました。`));
+        addedMessages.push(textMessage(`${selection.drinkName} を ${qty}個 追加しました！`));
       }
 
       session.currentSelection = null;
@@ -747,7 +750,8 @@ async function beginReservationFlow(replyToken, userId) {
           .map((item) => normalizeYmdDate(item?.date))
           .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
       : [];
-  const availableDates = filterAvailableDatesByPickupTime(rawAvailableDates);
+
+  const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
 
   if (!bookingConfig.ok || !availableDates.length) {
     await replyMessage(replyToken, [
@@ -765,6 +769,7 @@ async function beginReservationFlow(replyToken, userId) {
   await savePendingSession(userId, session);
 
   await replyMessage(replyToken, [
+    textMessage(`${STORE_NAME}のランチ弁当予約です！\nカレンダーから受取日と時間を選んでください🗓️`),
     createDateSelectMessage()
   ]);
 }
@@ -849,13 +854,15 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   });
 
   const bookingConfig = await fetchBookingConfig();
+
   const rawAvailableDates =
     bookingConfig.ok && Array.isArray(bookingConfig.dates)
       ? bookingConfig.dates
           .map((item) => normalizeYmdDate(item?.date))
           .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
       : [];
-  const availableDates = filterAvailableDatesByPickupTime(rawAvailableDates);
+
+  const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
 
   session.availableDateOptions = Array.isArray(bookingConfig.dates)
     ? bookingConfig.dates
@@ -1121,7 +1128,7 @@ function buildDrinkBubble(drink) {
 function buildLargeRiceMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName}ですね！\nご飯の大盛りが無料でできます！いかがですか🤔？`,
+    text: `${menuName}ですね。\nご飯の大盛りができますが、いかがですか？`,
     quickReply: {
       items: [
         quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
@@ -1134,7 +1141,7 @@ function buildLargeRiceMessage(menuName) {
 function buildDrinkConfirmMessage(menuName) {
   return {
     type: 'text',
-    text: `${menuName}ですね！\nドリンクはお付けしますか🤔？`,
+    text: `${menuName}ですね。\nドリンクはお付けしますか？`,
     quickReply: {
       items: [
         quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
@@ -1243,7 +1250,7 @@ function buildReservationCompleteMessage(reservation) {
 function startGuideMessage() {
   return {
     type: 'text',
-    text: `${STORE_NAME}のランチ弁当予約です！\n「予約を始める」と送っていただければ開始できます😊`,
+    text: `${STORE_NAME}のお弁当予約フォームです！\n「予約を始める」を押していただければ開始できます😊`,
     quickReply: {
       items: [quickPostbackItem('予約を始める', 'action=reserve_start', '予約を始める')]
     }
@@ -2013,6 +2020,21 @@ function getNowJstDateLabel(now = new Date()) {
 
 function filterAvailableDatesByPickupTime(dates, now = new Date()) {
   return (dates || []).filter((date) => getAvailablePickupTimesForDate(date, now).length > 0);
+}
+
+function buildEffectiveAvailableDates(rawDates, now = new Date()) {
+  const normalized = (rawDates || [])
+    .map((date) => normalizeYmdDate(date))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+
+  const mergedDateSet = new Set(normalized);
+  const todayJst = getNowJstDateLabel(now);
+
+  if (normalized.length > 0 && getAvailablePickupTimesForDate(todayJst, now).length > 0) {
+    mergedDateSet.add(todayJst);
+  }
+
+  return filterAvailableDatesByPickupTime([...mergedDateSet], now);
 }
 
 function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
