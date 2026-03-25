@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-25-liiffix-11';
+const APP_VERSION = '2026-03-26-liiffix-12';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -995,12 +995,43 @@ async function beginReservationFlow(replyToken, userId) {
 
   await savePendingSession(userId, session);
 
-  await replyMessage(replyToken, [
-    textMessage(`${STORE_NAME}のランチ弁当予約です！\nカレンダーから受取日と時間を選んでください🗓️`),
-    createDateSelectMessage()
-  ]);
+  await replyMessage(replyToken, [createReservationStartMessage()]);
 }
+function createReservationStartMessage() {
+  if (!LIFF_ID) {
+    return withNavQuickReply(
+      textMessage(
+        `${STORE_NAME}のランチ弁当予約です！\n` +
+        `カレンダーから受取日と時間を選んでください🗓️\n\n` +
+        `受取希望日を YYYY-MM-DD 形式で送ってください。\n` +
+        `例：2026-03-24`
+      ),
+      { includeBack: true, includeCancel: true }
+    );
+  }
 
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text:
+        `${STORE_NAME}のランチ弁当予約です！\n` +
+        `カレンダーから受取日と時間を選んでください🗓️`,
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: {
+              type: 'uri',
+              label: 'カレンダーを開く',
+              uri: `https://liff.line.me/${LIFF_ID}`
+            }
+          }
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
+}
 function createDateSelectMessage() {
   if (!LIFF_ID) {
     return withNavQuickReply(
@@ -3020,13 +3051,23 @@ function isReservationStartText(text) {
 
   if (!t) return false;
 
-  return [
-    '予約',
-    '予約する',
-    '弁当予約',
-    'ランチ予約',
-    'テイクアウト予約'
-  ].includes(t);
+  if (
+    [
+      '予約',
+      '予約する',
+      '弁当予約',
+      'ランチ予約',
+      'テイクアウト予約'
+    ].includes(t)
+  ) {
+    return true;
+  }
+
+  if (t.includes('ご予約に進みます')) {
+    return true;
+  }
+
+  return false;
 }
 
 function isResetText(text) {
