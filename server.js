@@ -2211,12 +2211,19 @@ function withNavQuickReply(message, options = {}) {
     ? message.quickReply.items
     : [];
 
+  function withNavQuickReply(message, options = {}) {
+  const navItems = buildNavQuickReplyItems(options);
+  const currentItems = Array.isArray(message?.quickReply?.items)
+    ? message.quickReply.items
+    : [];
+
   return {
     ...message,
     quickReply: {
       items: [...currentItems, ...navItems]
     }
   };
+}
 }
 
 async function handleBackAction(replyToken, userId, session) {
