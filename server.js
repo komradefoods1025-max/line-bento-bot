@@ -34,6 +34,7 @@ const CHANGE_PHONE_ACTION = 'change_phone';
 const CHANGE_ITEMS_ACTION = 'change_items';
 const CHANGE_REVIEW_ACTION = 'change_review';
 const CHANGE_CONFIRM_ACTION = 'change_confirm';
+const CHANGE_ADD_ITEMS_ACTION = 'change_add_items';
 
 const DAILY_MENU_KEY = 'daily_menu';
 const EXTRA_KARAAGE_KEY = 'extra_karaage';
@@ -594,6 +595,17 @@ if (isReviewText(text)) {
       await replyMessage(replyToken, [buildChangePhoneInputMessage()]);
       return;
     }
+if (data.action === CHANGE_ADD_ITEMS_ACTION) {
+  session.currentSelection = null;
+  transitionSession(session, 'waiting_menu');
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage('現在のご注文に商品を追加してください🍱'),
+    ...buildMenuStepMessages(session)
+  ]);
+  return;
+}
 if (data.action === CHANGE_ITEMS_ACTION) {
   session.items = [];
   session.currentSelection = null;
@@ -1816,8 +1828,22 @@ function buildChangeMenuMessage(session) {
             margin: 'sm'
           },
           {
-            type: 'separator',
-            margin: 'md'
+  type: 'separator',
+  margin: 'md'
+},
+buildChangeMenuRow(
+  'メニュー追加',
+  '現在の注文に商品を追加',
+  `action=${CHANGE_ADD_ITEMS_ACTION}`,
+  'メニューを追加'
+),
+buildChangeMenuRow(
+  '受取日',
+  session && session.date ? formatDateWithWeekday(session.date) : '未設定',
+  `action=${CHANGE_DATE_ACTION}`,
+  '受取日を変更'
+),
+
           },
           buildChangeMenuRow(
             'メニュー',
