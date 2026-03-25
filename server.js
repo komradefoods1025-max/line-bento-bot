@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-26-liiffix-12';
+const APP_VERSION = '2026-03-26-liiffix-13';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -750,47 +750,44 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'rice_size') {
-      if (!session.currentSelection) {
-        session.step = 'waiting_menu';
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('もう一度商品を選んでください。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+  if (!session.currentSelection) {
+    session.step = 'waiting_menu';
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('もう一度商品を選んでください。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      session.currentSelection.riceSize =
-        data.value === 'yes' ? '大盛り' : '普通';
+  const riceSize = normalizeRiceSizeLabel(data.value) || '普通';
+  session.currentSelection.riceSize = riceSize;
 
-      const riceLabel =
-        session.currentSelection.riceSize === '大盛り'
-          ? 'ご飯大盛り'
-          : 'ご飯普通';
+  const riceLabel = `ご飯${riceSize}`;
 
-      if (canOfferDrinkForSelection(session.currentSelection)) {
-        transitionSession(session, 'waiting_drink_confirm');
-        await savePendingSession(userId, session);
+  if (canOfferDrinkForSelection(session.currentSelection)) {
+    transitionSession(session, 'waiting_drink_confirm');
+    await savePendingSession(userId, session);
 
-        await replyMessage(replyToken, [
-          textMessage(`${riceLabel}で承りました😊`),
-          buildDrinkConfirmMessage(session.currentSelection.menuName)
-        ]);
-        return;
-      }
+    await replyMessage(replyToken, [
+      textMessage(`${riceLabel}で承りました😊`),
+      buildDrinkConfirmMessage(session.currentSelection.menuName)
+    ]);
+    return;
+  }
 
-      transitionSession(session, 'waiting_qty');
-      await savePendingSession(userId, session);
+  transitionSession(session, 'waiting_qty');
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        textMessage(`${riceLabel}で承りました😊`),
-        buildQtyMessage(
-          getCurrentSelectionLabel(session.currentSelection),
-          session.currentSelection.itemType || 'food'
-        )
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    textMessage(`${riceLabel}で承りました😊`),
+    buildQtyMessage(
+      getCurrentSelectionLabel(session.currentSelection),
+      session.currentSelection.itemType || 'food'
+    )
+  ]);
+  return;
+}
 
     if (data.action === 'drink_confirm') {
       if (!session.currentSelection) {
@@ -1453,12 +1450,12 @@ function buildLargeRiceMessage(menuName) {
   return withNavQuickReply(
     {
       type: 'text',
-      text: `${menuName}ですね！
-ご飯の大盛りは無料ですが、いかがしますか？`,
+      text: `${menuName}ですね！\nご飯の量を選んでください🍚`,
       quickReply: {
         items: [
-          quickPostbackItem('はい', 'action=rice_size&value=yes', 'ご飯大盛りにする'),
-          quickPostbackItem('いいえ', 'action=rice_size&value=no', 'ご飯は普通にする')
+          quickPostbackItem('小盛り', 'action=rice_size&value=small', 'ご飯は小盛り'),
+          quickPostbackItem('普通', 'action=rice_size&value=normal', 'ご飯は普通'),
+          quickPostbackItem('大盛り', 'action=rice_size&value=large', 'ご飯は大盛り')
         ]
       }
     },
@@ -2313,12 +2310,28 @@ function formatOrderLines(items) {
     )
     .join('\n');
 }
+function normalizeRiceSizeLabel(value) {
+  const v = String(value || '').trim().toLowerCase();
 
+  if (v === 'small' || v === '小' || v === '小盛り') return '小盛り';
+  if (v === 'large' || v === 'yes' || v === '大' || v === '大盛り') return '大盛り';
+  if (v === 'normal' || v === 'no' || v === '普通') return '普通';
+
+  return '';
+}
 function getDisplayMenuName(item) {
   if (!item) return '商品';
-  if (item.riceSize === '大盛り') {
+
+  const riceSize = normalizeRiceSizeLabel(item.riceSize);
+
+  if (riceSize === '小盛り') {
+    return `${item.menuName}（ご飯小盛り）`;
+  }
+
+  if (riceSize === '大盛り') {
     return `${item.menuName}（ご飯大盛り）`;
   }
+
   return item.menuName;
 }
 
