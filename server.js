@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-cconst APP_VERSION = '2026-03-26-liiffix-14';
+const APP_VERSION = '2026-03-26-liiffix-14';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
