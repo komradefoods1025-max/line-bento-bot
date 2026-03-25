@@ -430,7 +430,7 @@ if (isReviewText(text)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('まだ商品が入っていません。'),
-          buildMenuStepMessages(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -646,7 +646,7 @@ if (isReviewText(text)) {
 
       await replyMessage(replyToken, [
         textMessage(`受取時間：${selectedTime}`),
-        buildMenuStepMessages(session)
+        ...buildMenuStepMessages(session)
       ]);
       return;
     }
@@ -658,7 +658,7 @@ if (isReviewText(text)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('メニューが見つかりませんでした。'),
-          buildMenuStepMessages(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -714,7 +714,7 @@ if (isReviewText(text)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('ドリンクが見つかりませんでした。'),
-          buildMenuStepMessages(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -756,44 +756,44 @@ if (isReviewText(text)) {
     }
 
     if (data.action === 'rice_size') {
-  if (!session.currentSelection) {
-    session.step = 'waiting_menu';
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('もう一度商品を選んでください。'),
-      buildMenuStepMessages(session)
-    ]);
-    return;
-  }
+      if (!session.currentSelection) {
+        session.step = 'waiting_menu';
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('もう一度商品を選んでください。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
 
-  const riceSize = normalizeRiceSizeLabel(data.value) || '普通';
-  session.currentSelection.riceSize = riceSize;
+      const riceSize = normalizeRiceSizeLabel(data.value) || '普通';
+      session.currentSelection.riceSize = riceSize;
 
-  const riceLabel = `ご飯${riceSize}`;
+      const riceLabel = `ご飯${riceSize}`;
 
-  if (canOfferDrinkForSelection(session.currentSelection)) {
-    transitionSession(session, 'waiting_drink_confirm');
-    await savePendingSession(userId, session);
+      if (canOfferDrinkForSelection(session.currentSelection)) {
+        transitionSession(session, 'waiting_drink_confirm');
+        await savePendingSession(userId, session);
 
-    await replyMessage(replyToken, [
-      textMessage(`${riceLabel}で承りました😊`),
-      buildDrinkConfirmMessage(session.currentSelection.menuName)
-    ]);
-    return;
-  }
+        await replyMessage(replyToken, [
+          textMessage(`${riceLabel}で承りました😊`),
+          buildDrinkConfirmMessage(session.currentSelection.menuName)
+        ]);
+        return;
+      }
 
-  transitionSession(session, 'waiting_qty');
-  await savePendingSession(userId, session);
+      transitionSession(session, 'waiting_qty');
+      await savePendingSession(userId, session);
 
-  await replyMessage(replyToken, [
-    textMessage(`${riceLabel}で承りました😊`),
-    buildQtyMessage(
-      getCurrentSelectionLabel(session.currentSelection),
-      session.currentSelection.itemType || 'food'
-    )
-  ]);
-  return;
-}
+      await replyMessage(replyToken, [
+        textMessage(`${riceLabel}で承りました😊`),
+        buildQtyMessage(
+          getCurrentSelectionLabel(session.currentSelection),
+          session.currentSelection.itemType || 'food'
+        )
+      ]);
+      return;
+    }
 
     if (data.action === 'drink_confirm') {
       if (!session.currentSelection) {
@@ -801,7 +801,7 @@ if (isReviewText(text)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('もう一度商品を選んでください。'),
-          buildMenuStepMessages(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -832,131 +832,13 @@ if (isReviewText(text)) {
           getCurrentSelectionLabel(session.currentSelection),
           session.currentSelection.itemType || 'food'
         )
-function parseQtyText(text) {
-  const normalized = String(text || '')
-    .normalize('NFKC')
-    .replace(/\s+/g, '')
-    .trim();
-
-  if (!normalized) return 0;
-
-  const match = normalized.match(/^(\d{1,2})(?:個)?$/);
-  if (!match) return 0;
-
-  const qty = Number(match[1] || 0);
-  if (!Number.isInteger(qty)) return 0;
-  if (qty < 1 || qty > 10) return 0;
-
-  return qty;
-}
-
-async function handleQtySelection(replyToken, userId, session, qty) {
-  const safeQty = Number(qty || 0);
-
-  if (!safeQty || !session?.currentSelection) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('個数をもう一度選んでください。'),
-      buildQtyMessage(
-        getCurrentSelectionLabel(session?.currentSelection),
-        session?.currentSelection?.itemType || 'food'
-      )
-    ]);
-    return;
-  }
-
-  const selection = { session.currentSelection };
-
-  addItemToCart(session, {
-    itemType: selection.itemType || 'food',
-    menuKey: selection.menuKey,
-    menuName: selection.menuName,
-    price: Number(selection.price || 0),
-    riceSize: selection.riceSize || '',
-    qty: safeQty
-  });
-
-  const addedMessages = [
-    textMessage(`${getCurrentSelectionLabel(selection)} を ${safeQty}個 追加しました！`)
-  ];
-
-  if (selection.drinkKey && selection.drinkName) {
-    addItemToCart(session, {
-      itemType: 'drink',
-      menuKey: selection.drinkKey,
-      menuName: selection.drinkName,
-      price: Number(selection.drinkPrice || 0),
-      riceSize: '',
-      qty: safeQty
-    });
-
-    addedMessages.push(
-      textMessage(`${selection.drinkName} を ${safeQty}個 追加しました！`)
-    );
-  }
-
-  transitionSession(session, 'menu_or_review', { currentSelection: null });
-  await savePendingSession(userId, session);
-
-  await replyMessage(replyToken, [
-    addedMessages,
-    buildCartSummaryMessage(session),
-    buildCartActionMessage()
-  ]);
-}
-
-function isQtyText(text) {
-  return parseQtyText(text) > 0;
-}
       ]);
       return;
     }
 
     if (data.action === 'qty') {
-  const qty = Number(data.value || 0);
-  await handleQtySelection(replyToken, userId, session, qty);
-  return;
-}
-
-      const selection = { session.currentSelection };
-
-      addItemToCart(session, {
-        itemType: selection.itemType || 'food',
-        menuKey: selection.menuKey,
-        menuName: selection.menuName,
-        price: Number(selection.price || 0),
-        riceSize: selection.riceSize || '',
-        qty
-      });
-
-      const addedMessages = [
-        textMessage(
-          `${getCurrentSelectionLabel(selection)} を ${qty}個 追加しました！`
-        )
-      ];
-
-      if (selection.drinkKey && selection.drinkName) {
-        addItemToCart(session, {
-          itemType: 'drink',
-          menuKey: selection.drinkKey,
-          menuName: selection.drinkName,
-          price: Number(selection.drinkPrice || 0),
-          riceSize: '',
-          qty
-        });
-        addedMessages.push(
-          textMessage(`${selection.drinkName} を ${qty}個 追加しました！`)
-        );
-      }
-
-      transitionSession(session, 'menu_or_review', { currentSelection: null });
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        addedMessages,
-        buildCartSummaryMessage(session),
-        buildCartActionMessage()
-      ]);
+      const qty = Number(data.value || 0);
+      await handleQtySelection(replyToken, userId, session, qty);
       return;
     }
 
@@ -972,7 +854,7 @@ function isQtyText(text) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('まだ商品が入っていません。'),
-          buildMenuStepMessages(session)
+          ...buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -998,7 +880,7 @@ function isQtyText(text) {
         userId,
         date: session.date,
         time: session.time,
-        items: session.items.map((item) => ({ item })),
+        items: session.items.map((item) => ({ ...item })),
         itemCount: session.items.length,
         totalQty: getCartTotalQty(session.items),
         total: getCartTotalAmount(session.items),
@@ -1286,7 +1168,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     textMessage(
       `受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n受取時間：${normalizedSelectedTime}`
     ),
-    buildMenuStepMessages(session)
+    ...buildMenuStepMessages(session)
   ]);
 }
 
@@ -1614,6 +1496,84 @@ function buildQtyMessage(itemName, itemType = 'food') {
     { includeBack: true, includeCancel: true }
   );
 }
+
+function parseQtyText(text) {
+  const normalized = String(text || '')
+    .normalize('NFKC')
+    .replace(/\s+/g, '')
+    .trim();
+
+  if (!normalized) return 0;
+
+  const match = normalized.match(/^(\d{1,2})(?:個)?$/);
+  if (!match) return 0;
+
+  const qty = Number(match[1] || 0);
+  if (!Number.isInteger(qty)) return 0;
+  if (qty < 1 || qty > 10) return 0;
+
+  return qty;
+}
+
+async function handleQtySelection(replyToken, userId, session, qty) {
+  const safeQty = Number(qty || 0);
+
+  if (!safeQty || !session?.currentSelection) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('個数をもう一度選んでください。'),
+      buildQtyMessage(
+        getCurrentSelectionLabel(session?.currentSelection),
+        session?.currentSelection?.itemType || 'food'
+      )
+    ]);
+    return;
+  }
+
+  const selection = { ...session.currentSelection };
+
+  addItemToCart(session, {
+    itemType: selection.itemType || 'food',
+    menuKey: selection.menuKey,
+    menuName: selection.menuName,
+    price: Number(selection.price || 0),
+    riceSize: selection.riceSize || '',
+    qty: safeQty
+  });
+
+  const addedMessages = [
+    textMessage(`${getCurrentSelectionLabel(selection)} を ${safeQty}個 追加しました！`)
+  ];
+
+  if (selection.drinkKey && selection.drinkName) {
+    addItemToCart(session, {
+      itemType: 'drink',
+      menuKey: selection.drinkKey,
+      menuName: selection.drinkName,
+      price: Number(selection.drinkPrice || 0),
+      riceSize: '',
+      qty: safeQty
+    });
+
+    addedMessages.push(
+      textMessage(`${selection.drinkName} を ${safeQty}個 追加しました！`)
+    );
+  }
+
+  transitionSession(session, 'menu_or_review', { currentSelection: null });
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    ...addedMessages,
+    buildCartSummaryMessage(session),
+    buildCartActionMessage()
+  ]);
+}
+
+function isQtyText(text) {
+  return parseQtyText(text) > 0;
+}
+
 function buildChangeCurrentSummaryMessage(session) {
   return textMessage(
     `変更後の予約内容です💁‍♀️
@@ -1926,7 +1886,7 @@ function buildResumeMessages(session) {
       ];
 
     case 'waiting_menu':
-      return [textMessage('ご予約の続きをご案内します。'), buildMenuStepMessages(session)];
+      return [textMessage('ご予約の続きをご案内します。'), ...buildMenuStepMessages(session)];
 
     case 'waiting_rice_size':
       return [
@@ -2012,7 +1972,7 @@ function buildReminderMessages(session) {
       return [head, buildTimeMessage(session.date)];
 
     case 'waiting_menu':
-      return [head, buildMenuStepMessages(session)];
+      return [head, ...buildMenuStepMessages(session)];
 
     case 'waiting_rice_size':
       return [head, buildLargeRiceMessage(session.currentSelection?.menuName || '商品')];
@@ -2118,9 +2078,9 @@ function withNavQuickReply(message, options = {}) {
     : [];
 
   return {
-    message,
+    ...message,
     quickReply: {
-      items: [currentItems, navItems]
+      items: [...currentItems, ...navItems]
     }
   };
 }
@@ -2130,7 +2090,7 @@ async function handleBackAction(replyToken, userId, session) {
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('これ以上戻れません。'),
-      buildResumeMessages(session)
+      ...buildResumeMessages(session)
     ]);
     return;
   }
@@ -2670,7 +2630,7 @@ async function beginReservationChangeFlow(replyToken, userId) {
     time: reservation.time,
     name: reservation.name,
     phone: reservation.phone,
-    items: Array.isArray(reservation.items) ? reservation.items.map((item) => ({ item })) : [],
+    items: Array.isArray(reservation.items) ? reservation.items.map((item) => ({ ...item })) : [],
     currentSelection: null,
     dailyMenu: await fetchDailyMenuConfig(reservation.date),
     availableDateOptions: bookingConfig.ok && Array.isArray(bookingConfig.dates) ? bookingConfig.dates : [],
@@ -2698,7 +2658,7 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
     userId,
     date: session.date,
     time: session.time,
-    items: Array.isArray(session.items) ? session.items.map((item) => ({ item })) : [],
+    items: Array.isArray(session.items) ? session.items.map((item) => ({ ...item })) : [],
     itemCount: Array.isArray(session.items) ? session.items.length : 0,
     totalQty: getCartTotalQty(session.items),
     total: getCartTotalAmount(session.items),
