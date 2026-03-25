@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-26-liiffix-13';
+cconst APP_VERSION = '2026-03-26-liiffix-14';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -409,17 +409,25 @@ async function handleEvent(event) {
       return;
     }
 
-    if (session?.step === 'waiting_date' && isYmdDate(text)) {
-      await handleSelectedDate(replyToken, userId, session, text);
-      return;
-    }
+    if (session.step === 'waiting_date' && isYmdDate(text)) {
+  await handleSelectedDate(replyToken, userId, session, text);
+  return;
+}
 
-    if (session?.step === 'change_waiting_date' && isYmdDate(text)) {
-      await handleSelectedDate(replyToken, userId, session, text);
-      return;
-    }
+if (session.step === 'change_waiting_date' && isYmdDate(text)) {
+  await handleSelectedDate(replyToken, userId, session, text);
+  return;
+}
 
-    if (isReviewText(text)) {
+if (session?.step === 'waiting_qty' && isQtyText(text)) {
+  const qty = parseQtyText(text);
+  await handleQtySelection(replyToken, userId, session, qty);
+  return;
+}
+
+if (isReviewText(text)) {
+  ...
+}) {
       if (!session.items.length) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
@@ -826,24 +834,91 @@ async function handleEvent(event) {
           getCurrentSelectionLabel(session.currentSelection),
           session.currentSelection.itemType || 'food'
         )
+function parseQtyText(text) {
+  const normalized = String(text || '')
+    .normalize('NFKC')
+    .replace(/\s+/g, '')
+    .trim();
+
+  if (!normalized) return 0;
+
+  const match = normalized.match(/^(\d{1,2})(?:個)?$/);
+  if (!match) return 0;
+
+  const qty = Number(match[1] || 0);
+  if (!Number.isInteger(qty)) return 0;
+  if (qty < 1 || qty > 10) return 0;
+
+  return qty;
+}
+
+async function handleQtySelection(replyToken, userId, session, qty) {
+  const safeQty = Number(qty || 0);
+
+  if (!safeQty || !session?.currentSelection) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('個数をもう一度選んでください。'),
+      buildQtyMessage(
+        getCurrentSelectionLabel(session?.currentSelection),
+        session?.currentSelection?.itemType || 'food'
+      )
+    ]);
+    return;
+  }
+
+  const selection = { ...session.currentSelection };
+
+  addItemToCart(session, {
+    itemType: selection.itemType || 'food',
+    menuKey: selection.menuKey,
+    menuName: selection.menuName,
+    price: Number(selection.price || 0),
+    riceSize: selection.riceSize || '',
+    qty: safeQty
+  });
+
+  const addedMessages = [
+    textMessage(`${getCurrentSelectionLabel(selection)} を ${safeQty}個 追加しました！`)
+  ];
+
+  if (selection.drinkKey && selection.drinkName) {
+    addItemToCart(session, {
+      itemType: 'drink',
+      menuKey: selection.drinkKey,
+      menuName: selection.drinkName,
+      price: Number(selection.drinkPrice || 0),
+      riceSize: '',
+      qty: safeQty
+    });
+
+    addedMessages.push(
+      textMessage(`${selection.drinkName} を ${safeQty}個 追加しました！`)
+    );
+  }
+
+  transitionSession(session, 'menu_or_review', { currentSelection: null });
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    ...addedMessages,
+    buildCartSummaryMessage(session),
+    buildCartActionMessage()
+  ]);
+}
+
+function isQtyText(text) {
+  return parseQtyText(text) > 0;
+}
       ]);
       return;
     }
 
     if (data.action === 'qty') {
-      const qty = Number(data.value || 0);
-
-      if (!qty || !session.currentSelection) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('個数をもう一度選んでください。'),
-          buildQtyMessage(
-            getCurrentSelectionLabel(session.currentSelection),
-            session.currentSelection?.itemType || 'food'
-          )
-        ]);
-        return;
-      }
+  const qty = Number(data.value || 0);
+  await handleQtySelection(replyToken, userId, session, qty);
+  return;
+}
 
       const selection = { ...session.currentSelection };
 
