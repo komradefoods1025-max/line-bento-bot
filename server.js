@@ -819,53 +819,52 @@ if (data.action === CHANGE_ITEMS_ACTION) {
       return;
     }
 
-    if (data.action === 'drink_confirm') {
-      if (!session.currentSelection) {
-        session.step = 'waiting_menu';
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('もう一度商品を選んでください。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+if (data.action === 'drink_confirm') {
+  if (!session.currentSelection) {
+    session.step = 'waiting_menu';
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('もう一度商品を選んでください。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      if (data.value === 'yes') {
-        transitionSession(session, 'waiting_drink_menu');
-        await savePendingSession(userId, session);
+  if (data.value === 'yes') {
+    transitionSession(session, 'waiting_drink_menu');
+    await savePendingSession(userId, session);
 
-        await replyMessage(replyToken, [
-          withNavQuickReply(
-            textMessage('付けるドリンクを選んでください🥤'),
-            { includeBack: true, includeCancel: true }
-          ),
-          buildDrinkFlexMessage()
-        ]);
-        return;
-      }
+    await replyMessage(replyToken, [
+      withNavQuickReply(
+        textMessage('付けるドリンクを選んでください🥤'),
+        { includeBack: true, includeCancel: true }
+      ),
+      buildDrinkFlexMessage()
+    ]);
+    return;
+  }
 
-      session.currentSelection.drinkKey = '';
-      session.currentSelection.drinkName = '';
-      session.currentSelection.drinkPrice = 0;
-      transitionSession(session, 'waiting_qty');
-      await savePendingSession(userId, session);
+  session.currentSelection.drinkKey = '';
+  session.currentSelection.drinkName = '';
+  session.currentSelection.drinkPrice = 0;
+  transitionSession(session, 'waiting_qty');
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        textMessage('ドリンクなしで承りました😊'),
-        buildQtyMessage(
-          getCurrentSelectionLabel(session.currentSelection),
-          session.currentSelection.itemType || 'food'
-        )
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    textMessage('ドリンクなしで承りました😊'),
+    buildQtyMessage(
+      getCurrentSelectionLabel(session.currentSelection),
+      session.currentSelection.itemType || 'food'
+    )
+  ]);
+  return;
+}
 
-    if (data.action === 'qty') {
-      const qty = Number(data.value || 0);
-      await handleQtySelection(replyToken, userId, session, qty);
-      return;
-    }
-
+if (data.action === 'qty') {
+  const qty = Number(data.value || 0);
+  await handleQtySelection(replyToken, userId, session, qty);
+  return;
+}
     if (data.action === 'add_more') {
       transitionSession(session, 'waiting_menu');
       await savePendingSession(userId, session);
