@@ -426,13 +426,12 @@ if (session?.step === 'waiting_qty' && isQtyText(text)) {
 }
 
 if (isReviewText(text)) {
-  ...
 }) {
       if (!session.items.length) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('まだ商品が入っていません。'),
-          ...buildMenuStepMessages(session)
+          buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -648,7 +647,7 @@ if (isReviewText(text)) {
 
       await replyMessage(replyToken, [
         textMessage(`受取時間：${selectedTime}`),
-        ...buildMenuStepMessages(session)
+        buildMenuStepMessages(session)
       ]);
       return;
     }
@@ -660,7 +659,7 @@ if (isReviewText(text)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('メニューが見つかりませんでした。'),
-          ...buildMenuStepMessages(session)
+          buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -716,7 +715,7 @@ if (isReviewText(text)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('ドリンクが見つかりませんでした。'),
-          ...buildMenuStepMessages(session)
+          buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -763,7 +762,7 @@ if (isReviewText(text)) {
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('もう一度商品を選んでください。'),
-      ...buildMenuStepMessages(session)
+      buildMenuStepMessages(session)
     ]);
     return;
   }
@@ -803,7 +802,7 @@ if (isReviewText(text)) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('もう一度商品を選んでください。'),
-          ...buildMenuStepMessages(session)
+          buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -867,7 +866,7 @@ async function handleQtySelection(replyToken, userId, session, qty) {
     return;
   }
 
-  const selection = { ...session.currentSelection };
+  const selection = { session.currentSelection };
 
   addItemToCart(session, {
     itemType: selection.itemType || 'food',
@@ -901,7 +900,7 @@ async function handleQtySelection(replyToken, userId, session, qty) {
   await savePendingSession(userId, session);
 
   await replyMessage(replyToken, [
-    ...addedMessages,
+    addedMessages,
     buildCartSummaryMessage(session),
     buildCartActionMessage()
   ]);
@@ -920,7 +919,7 @@ function isQtyText(text) {
   return;
 }
 
-      const selection = { ...session.currentSelection };
+      const selection = { session.currentSelection };
 
       addItemToCart(session, {
         itemType: selection.itemType || 'food',
@@ -955,7 +954,7 @@ function isQtyText(text) {
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
-        ...addedMessages,
+        addedMessages,
         buildCartSummaryMessage(session),
         buildCartActionMessage()
       ]);
@@ -974,7 +973,7 @@ function isQtyText(text) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
           textMessage('まだ商品が入っていません。'),
-          ...buildMenuStepMessages(session)
+          buildMenuStepMessages(session)
         ]);
         return;
       }
@@ -1000,7 +999,7 @@ function isQtyText(text) {
         userId,
         date: session.date,
         time: session.time,
-        items: session.items.map((item) => ({ ...item })),
+        items: session.items.map((item) => ({ item })),
         itemCount: session.items.length,
         totalQty: getCartTotalQty(session.items),
         total: getCartTotalAmount(session.items),
@@ -1288,7 +1287,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     textMessage(
       `受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n受取時間：${normalizedSelectedTime}`
     ),
-    ...buildMenuStepMessages(session)
+    buildMenuStepMessages(session)
   ]);
 }
 
@@ -1928,7 +1927,7 @@ function buildResumeMessages(session) {
       ];
 
     case 'waiting_menu':
-      return [textMessage('ご予約の続きをご案内します。'), ...buildMenuStepMessages(session)];
+      return [textMessage('ご予約の続きをご案内します。'), buildMenuStepMessages(session)];
 
     case 'waiting_rice_size':
       return [
@@ -2014,7 +2013,7 @@ function buildReminderMessages(session) {
       return [head, buildTimeMessage(session.date)];
 
     case 'waiting_menu':
-      return [head, ...buildMenuStepMessages(session)];
+      return [head, buildMenuStepMessages(session)];
 
     case 'waiting_rice_size':
       return [head, buildLargeRiceMessage(session.currentSelection?.menuName || '商品')];
@@ -2120,9 +2119,9 @@ function withNavQuickReply(message, options = {}) {
     : [];
 
   return {
-    ...message,
+    message,
     quickReply: {
-      items: [...currentItems, ...navItems]
+      items: [currentItems, navItems]
     }
   };
 }
@@ -2132,7 +2131,7 @@ async function handleBackAction(replyToken, userId, session) {
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage('これ以上戻れません。'),
-      ...buildResumeMessages(session)
+      buildResumeMessages(session)
     ]);
     return;
   }
@@ -2672,7 +2671,7 @@ async function beginReservationChangeFlow(replyToken, userId) {
     time: reservation.time,
     name: reservation.name,
     phone: reservation.phone,
-    items: Array.isArray(reservation.items) ? reservation.items.map((item) => ({ ...item })) : [],
+    items: Array.isArray(reservation.items) ? reservation.items.map((item) => ({ item })) : [],
     currentSelection: null,
     dailyMenu: await fetchDailyMenuConfig(reservation.date),
     availableDateOptions: bookingConfig.ok && Array.isArray(bookingConfig.dates) ? bookingConfig.dates : [],
@@ -2700,7 +2699,7 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
     userId,
     date: session.date,
     time: session.time,
-    items: Array.isArray(session.items) ? session.items.map((item) => ({ ...item })) : [],
+    items: Array.isArray(session.items) ? session.items.map((item) => ({ item })) : [],
     itemCount: Array.isArray(session.items) ? session.items.length : 0,
     totalQty: getCartTotalQty(session.items),
     total: getCartTotalAmount(session.items),
@@ -2720,7 +2719,7 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
   }
 
   notifyStoreByLine({
-    ...reservation,
+    reservation,
     createdAt: reservation.updatedAt,
     totalQty: reservation.totalQty,
     total: reservation.total
@@ -3074,20 +3073,20 @@ function buildEffectiveAvailableDates(rawDates, now = new Date()) {
     mergedDateSet.add(todayJst);
   }
 
-  return filterAvailableDatesByPickupTime([...mergedDateSet], now);
+  return filterAvailableDatesByPickupTime([mergedDateSet], now);
 }
 
 function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
   const normalizedDate = normalizeYmdDate(dateStr);
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
-    return [...PICKUP_TIMES];
+    return [PICKUP_TIMES];
   }
 
   const todayJst = getNowJstDateLabel(now);
 
   if (normalizedDate !== todayJst) {
-    return [...PICKUP_TIMES];
+    return [PICKUP_TIMES];
   }
 
   const threshold = new Date(now.getTime() + SAME_DAY_LEAD_MINUTES * 60 * 1000);
