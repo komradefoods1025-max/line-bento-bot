@@ -31,6 +31,7 @@ const CHANGE_DATE_ACTION = 'change_date';
 const CHANGE_TIME_ACTION = 'change_time';
 const CHANGE_NAME_ACTION = 'change_name';
 const CHANGE_PHONE_ACTION = 'change_phone';
+const CHANGE_ITEMS_ACTION = 'change_items';
 const CHANGE_REVIEW_ACTION = 'change_review';
 const CHANGE_CONFIRM_ACTION = 'change_confirm';
 
@@ -593,7 +594,18 @@ if (isReviewText(text)) {
       await replyMessage(replyToken, [buildChangePhoneInputMessage()]);
       return;
     }
+if (data.action === CHANGE_ITEMS_ACTION) {
+  session.items = [];
+  session.currentSelection = null;
+  transitionSession(session, 'waiting_menu');
+  await savePendingSession(userId, session);
 
+  await replyMessage(replyToken, [
+    textMessage('変更後のメニューを選んでください🍱\nいまのメニュー内容は一度リセットされます。'),
+    ...buildMenuStepMessages(session)
+  ]);
+  return;
+}
     if (data.action === CHANGE_REVIEW_ACTION) {
       await savePendingSession(userId, session);
       await replyMessage(replyToken, [
@@ -1560,6 +1572,18 @@ async function handleQtySelection(replyToken, userId, session, qty) {
     );
   }
 
+  if (session.flowType === 'change') {
+    transitionSession(session, 'change_menu', { currentSelection: null });
+    await savePendingSession(userId, session);
+
+    await replyMessage(replyToken, [
+      ...addedMessages,
+      buildChangeCurrentSummaryMessage(session),
+      buildChangeMenuMessage(session)
+    ]);
+    return;
+  }
+
   transitionSession(session, 'menu_or_review', { currentSelection: null });
   await savePendingSession(userId, session);
 
@@ -1694,7 +1718,14 @@ function formatPhoneForDisplay(phone) {
 
   return safeChangeMenuText(phone, '未設定');
 }
+function buildChangeItemsText(items) {
+  if (!Array.isArray(items) || !items.length) return '未設定';
 
+  return (
+    `${formatOrderLines(items)}\n` +
+    `合計 ${getCartTotalQty(items)}個 / ¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}`
+  );
+}
 function buildChangeMenuRow(label, value, actionData, displayText) {
   return {
     type: 'box',
@@ -1789,6 +1820,12 @@ function buildChangeMenuMessage(session) {
             margin: 'md'
           },
           buildChangeMenuRow(
+            'メニュー',
+            buildChangeItemsText(session && session.items),
+            `action=${CHANGE_ITEMS_ACTION}`,
+            'メニューを変更'
+          ),
+          buildChangeMenuRow(
             '受取日',
             session && session.date ? formatDateWithWeekday(session.date) : '未設定',
             `action=${CHANGE_DATE_ACTION}`,
@@ -1869,7 +1906,6 @@ function buildChangeMenuMessage(session) {
     }
   };
 }
-
 function buildChangeNameInputMessage() {
   return withNavQuickReply(
     {
