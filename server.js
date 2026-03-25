@@ -1410,94 +1410,6 @@ function buildQtyMessage(itemName, itemType = 'food') {
     { includeBack: true, includeCancel: true }
   );
 }
-
-function buildCartSummaryMessage(session) {
-  return textMessage(
-    `現在のご注文内容です😊\n\n${formatOrderLines(session.items)}` +
-      `\n合計個数：${getCartTotalQty(session.items)}個` +
-      `\n注文合計：¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}`
-  );
-}
-
-function buildCartActionMessage() {
-  return withNavQuickReply(
-    {
-      type: 'text',
-      text: '続けて商品を追加するか、注文内容を確認してください🔍',
-      quickReply: {
-        items: [
-          quickPostbackItem('商品を追加', 'action=add_more', '商品を追加'),
-          quickPostbackItem('注文内容を確認', 'action=review_order', '注文内容を確認'),
-          quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
-        ]
-      }
-    },
-    { includeBack: true, includeCancel: true }
-  );
-}
-
-function buildConfirmMessage(session) {
-  return withNavQuickReply(
-    {
-      type: 'text',
-      text:
-        `以下の内容でよろしければ予約確定ボタンよりご注文を完了してください💁‍♀️
-
-` +
-        `【受取日】${formatDateWithWeekday(session.date)}
-` +
-        `【受取時間】${session.time}
-` +
-        `【ご注文内容】
-${formatOrderLines(session.items)}
-` +
-        `【合計個数】${getCartTotalQty(session.items)}個
-` +
-        `【注文合計】¥${Number(getCartTotalAmount(session.items)).toLocaleString('ja-JP')}
-` +
-        `【お名前】${session.name}様
-` +
-        `【電話番号】${session.phone}`,
-      quickReply: {
-        items: [
-          quickPostbackItem('予約確定', 'action=confirm', '予約確定'),
-          quickPostbackItem('最初からやり直す', 'action=restart', '最初からやり直す')
-        ]
-      }
-    },
-    { includeBack: true, includeCancel: true }
-  );
-}
-
-function buildReservationCompleteMessage(reservation) {
-  return textMessage(
-    `ご注文ありがとうございます✨\n\n` +
-      `受付番号：${reservation.reservationNo}\n` +
-      `受取日：${formatDateWithWeekday(reservation.date)}\n` +
-      `受取時間：${reservation.time}\n` +
-      `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
-      `合計個数：${reservation.totalQty}個\n` +
-      `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
-      `お名前：${reservation.name}様\n` +
-      `電話番号：${reservation.phone}`
-  );
-}
-
-function buildLatestReservationMessage(reservation) {
-  return textMessage(
-    `現在のご予約内容です💁‍♀️\n\n` +
-      `受付番号：${reservation.reservationNo || '-'}\n` +
-      `受取日：${reservation.date ? formatDateWithWeekday(reservation.date) : '-'}\n` +
-      `受取時間：${reservation.time || '-'}\n` +
-      `ご注文内容：\n${reservation.orderLines || formatOrderLines(reservation.items || [])}\n` +
-      `合計個数：${reservation.totalQty || 0}個\n` +
-      `注文合計：¥${Number(reservation.total || 0).toLocaleString('ja-JP')}\n` +
-      `お名前：${reservation.name || '-'}様\n` +
-      `電話番号：${reservation.phone || '-'}\n` +
-      `ステータス：${reservation.status || '-'}`
-  );
-}
-
 function buildChangeCurrentSummaryMessage(session) {
   return textMessage(
     `変更後の予約内容です💁‍♀️
@@ -1641,25 +1553,25 @@ function buildChangeMenuMessage(session) {
           },
           buildChangeMenuRow(
             '受取日',
-            session?.date ? formatDateWithWeekday(session.date) : '未設定',
+            session && session.date ? formatDateWithWeekday(session.date) : '未設定',
             `action=${CHANGE_DATE_ACTION}`,
             '受取日を変更'
           ),
           buildChangeMenuRow(
             '受取時間',
-            safeChangeMenuText(session?.time, '未設定'),
+            safeChangeMenuText(session && session.time, '未設定'),
             `action=${CHANGE_TIME_ACTION}`,
             '受取時間を変更'
           ),
           buildChangeMenuRow(
             'お名前',
-            session?.name ? `${session.name}様` : '未設定',
+            session && session.name ? `${session.name}様` : '未設定',
             `action=${CHANGE_NAME_ACTION}`,
             '名前を変更'
           ),
           buildChangeMenuRow(
             '電話番号',
-            formatPhoneForDisplay(session?.phone),
+            formatPhoneForDisplay(session && session.phone),
             `action=${CHANGE_PHONE_ACTION}`,
             '電話番号を変更'
           )
@@ -1687,7 +1599,6 @@ function buildChangeMenuMessage(session) {
             style: 'primary',
             height: 'sm',
             action: {
-              type: {
               type: 'postback',
               label: '変更確定',
               data: `action=${CHANGE_CONFIRM_ACTION}`,
