@@ -2636,7 +2636,41 @@ async function updateReservationOnSheet(reservation) {
     return { ok: false, error: String(err) };
   }
 }
+function buildLatestReservationMessage(reservation) {
+  const items = Array.isArray(reservation?.items) ? reservation.items : [];
+  const totalQty =
+    reservation?.totalQty != null && reservation.totalQty !== ''
+      ? Number(reservation.totalQty)
+      : getCartTotalQty(items);
+  const totalAmount =
+    reservation?.total != null && reservation.total !== ''
+      ? Number(reservation.total)
+      : getCartTotalAmount(items);
 
+  return textMessage(
+    `現在のご予約内容です📋
+
+` +
+      `受付番号：${reservation?.reservationNo || '-'}
+` +
+      `受取日：${reservation?.date ? formatDateWithWeekday(reservation.date) : '-'}
+` +
+      `受取時間：${reservation?.time || '-'}
+` +
+      `ご注文内容：
+${formatOrderLines(items)}
+` +
+      `合計個数：${totalQty}個
+` +
+      `注文合計：¥${Number(totalAmount).toLocaleString('ja-JP')}
+` +
+      `お名前：${reservation?.name || '-'}様
+` +
+      `電話番号：${formatPhoneForDisplay(reservation?.phone || '')}
+` +
+      `ステータス：${reservation?.status || '受付済み'}`
+  );
+}
 async function handleViewLatestReservation(replyToken, userId) {
   const result = await fetchLatestReservation(userId);
 
