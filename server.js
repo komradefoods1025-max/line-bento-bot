@@ -233,7 +233,76 @@ app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
     return res.sendStatus(500);
   }
 });
+function normalizeActionToken(value) {
+  return String(value || '').trim().toLowerCase();
+}
 
+function getRichMenuIntentFromEvent(event) {
+  if (!event) return '';
+
+  if (event.type === 'message' && event.message?.type === 'text') {
+    const text = normalizeWebhookText(event.message.text || '');
+
+    if (isReservationViewText(text)) return 'view';
+    if (isReservationChangeText(text)) return 'change';
+    return '';
+  }
+
+  if (event.type === 'postback') {
+    const data = parsePostbackData(event.postback?.data || '');
+    const action = normalizeActionToken(
+      data.action || data.mode || data.type || ''
+    );
+    const displayText = normalizeWebhookText(event.postback?.displayText || '');
+
+    if (
+      [
+        'reservation_view',
+        'reservation_confirm',
+        'view_reservation',
+        'show_reservation',
+        'begin_view'
+      ].includes(action)
+    ) {
+      return 'view';
+    }
+
+    if (
+      [
+        'reservation_change',
+        'change_reservation',
+        'begin_change'
+      ].includes(action)
+    ) {
+      return 'change';
+    }
+
+    if (displayText) {
+      if (isReservationViewText(displayText)) return 'view';
+      if (isReservationChangeText(displayText)) return 'change';
+    }
+  }
+
+  return '';
+}
+
+async function handleRichMenuEntry(event, replyToken, userId) {
+  const intent = getRichMenuIntentFromEvent(event);
+
+  if (!intent || !userId) return false;
+
+  if (intent === 'view') {
+    await handleViewLatestReservation(replyToken, userId);
+    return true;
+  }
+
+  if (intent === 'change') {
+    await beginReservationChangeFlow(replyToken, userId);
+    return true;
+  }
+
+  return false;
+}
 async function handleEvent(event) {
   const replyToken = event.replyToken;
   if (!replyToken) return;
@@ -252,6 +321,13 @@ async function handleEvent(event) {
     await clearPendingSession(userId);
     await replyMessage(replyToken, [startGuideMessage()]);
     return;
+  }
+
+  // ここを最初に通すことで、
+  // リッチメニューが message でも postback でも拾えるようにする
+  if (userId && (event.type === 'message' || event.type === 'postback')) {
+    const handled = await handleRichMenuEntry(event, replyToken, userId);
+    if (handled) return;
   }
 
   if (event.type === 'message' && event.message?.type === 'text') {
@@ -282,7 +358,13 @@ async function handleEvent(event) {
       const normalized = text.slice(text.indexOf('予約日時|'));
       const [, selectedDate = '', selectedTime = ''] = normalized.split('|');
 
-      await handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime);
+      await handleSelectedDateTime(
+        replyToken,
+        userId,
+        session,
+        selectedDate,
+        selectedTime
+      );
       return;
     }
 
@@ -327,12 +409,12 @@ async function handleEvent(event) {
       return;
     }
 
-    if (session.step === 'waiting_date' && isYmdDate(text)) {
+    if (session?.step === 'waiting_date' && isYmdDate(text)) {
       await handleSelectedDate(replyToken, userId, session, text);
       return;
     }
 
-    if (session.step === 'change_waiting_date' && isYmdDate(text)) {
+    if (session?.step === 'change_waiting_date' && isYmdDate(text)) {
       await handleSelectedDate(replyToken, userId, session, text);
       return;
     }
@@ -357,7 +439,7 @@ async function handleEvent(event) {
       return;
     }
 
-    if (session.step === 'waiting_name') {
+    if (session?.step === 'waiting_name') {
       transitionSession(session, 'waiting_phone', { name: text });
       await savePendingSession(userId, session);
 
@@ -368,7 +450,7 @@ async function handleEvent(event) {
       return;
     }
 
-    if (session.step === 'waiting_phone') {
+    if (session?.step === 'waiting_phone') {
       const phone = normalizePhone(text);
 
       if (!isValidPhone(phone)) {
@@ -392,7 +474,7 @@ async function handleEvent(event) {
       return;
     }
 
-    if (session.step === 'change_waiting_name') {
+    if (session?.step === 'change_waiting_name') {
       transitionSession(session, 'change_menu', { name: text });
       await savePendingSession(userId, session);
 
@@ -404,7 +486,7 @@ async function handleEvent(event) {
       return;
     }
 
-    if (session.step === 'change_waiting_phone') {
+    if (session?.step === 'change_waiting_phone') {
       const phone = normalizePhone(text);
 
       if (!isValidPhone(phone)) {
@@ -484,7 +566,9 @@ async function handleEvent(event) {
       transitionSession(session, 'change_waiting_time');
       await savePendingSession(userId, session);
       await replyMessage(replyToken, [
-        textMessage(`変更後の受取時間を選んでください。\n現在の受取日：${formatDateWithWeekday(session.date)}`),
+        textMessage(
+          `変更後の受取時間を選んでください。\n現在の受取日：${formatDateWithWeekday(session.date)}`
+        ),
         buildTimeMessage(session.date)
       ]);
       return;
@@ -518,8 +602,14 @@ async function handleEvent(event) {
       return;
     }
 
+    if (data.action === 'pick_date') {
+      const selectedDate = event.postback?.params?.date || '';
+      await handleSelectedDate(replyToken, userId, session, selectedDate);
+      return;
+    }
+
     if (data.action === 'time') {
-      const selectedTime = String(data.value || '').trim();
+      const selectedTime = data.value || '';
       const availableTimes = getAvailablePickupTimesForDate(session.date);
 
       if (!availableTimes.includes(selectedTime)) {
@@ -670,10 +760,13 @@ async function handleEvent(event) {
         return;
       }
 
-      session.currentSelection.riceSize = data.value === 'yes' ? '大盛り' : '普通';
+      session.currentSelection.riceSize =
+        data.value === 'yes' ? '大盛り' : '普通';
 
       const riceLabel =
-        session.currentSelection.riceSize === '大盛り' ? 'ご飯大盛り' : 'ご飯普通';
+        session.currentSelection.riceSize === '大盛り'
+          ? 'ご飯大盛り'
+          : 'ご飯普通';
 
       if (canOfferDrinkForSelection(session.currentSelection)) {
         transitionSession(session, 'waiting_drink_confirm');
@@ -715,7 +808,10 @@ async function handleEvent(event) {
         await savePendingSession(userId, session);
 
         await replyMessage(replyToken, [
-          withNavQuickReply(textMessage('付けるドリンクを選んでください🥤'), { includeBack: true, includeCancel: true }),
+          withNavQuickReply(
+            textMessage('付けるドリンクを選んでください🥤'),
+            { includeBack: true, includeCancel: true }
+          ),
           buildDrinkFlexMessage()
         ]);
         return;
@@ -764,7 +860,9 @@ async function handleEvent(event) {
       });
 
       const addedMessages = [
-        textMessage(`${getCurrentSelectionLabel(selection)} を ${qty}個 追加しました！`)
+        textMessage(
+          `${getCurrentSelectionLabel(selection)} を ${qty}個 追加しました！`
+        )
       ];
 
       if (selection.drinkKey && selection.drinkName) {
@@ -776,7 +874,9 @@ async function handleEvent(event) {
           riceSize: '',
           qty
         });
-        addedMessages.push(textMessage(`${selection.drinkName} を ${qty}個 追加しました！`));
+        addedMessages.push(
+          textMessage(`${selection.drinkName} を ${qty}個 追加しました！`)
+        );
       }
 
       transitionSession(session, 'menu_or_review', { currentSelection: null });
@@ -842,7 +942,9 @@ async function handleEvent(event) {
 
       if (!saveResult.ok) {
         await replyMessage(replyToken, [
-          textMessage(`予約内容の保存でエラーが起きました。\n${saveResult.error}`)
+          textMessage(
+            `予約内容の保存でエラーが起きました。\n${saveResult.error}`
+          )
         ]);
         return;
       }
@@ -854,12 +956,13 @@ async function handleEvent(event) {
       clearSession(userId);
       await clearPendingSession(userId);
 
-      await replyMessage(replyToken, [buildReservationCompleteMessage(reservation)]);
+      await replyMessage(replyToken, [
+        buildReservationCompleteMessage(reservation)
+      ]);
       return;
     }
   }
 }
-
 async function beginReservationFlow(replyToken, userId) {
   clearSession(userId);
   await clearPendingSession(userId);
