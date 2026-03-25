@@ -414,7 +414,7 @@ async function handleEvent(event) {
   return;
 }
 
-if (session.step === 'change_waiting_date' && isYmdDate(text)) {
+if (session?.step === 'change_waiting_date' && isYmdDate(text)) {
   await handleSelectedDate(replyToken, userId, session, text);
   return;
 }
@@ -426,7 +426,6 @@ if (session?.step === 'waiting_qty' && isQtyText(text)) {
 }
 
 if (isReviewText(text)) {
-}) {
       if (!session.items.length) {
         await savePendingSession(userId, session);
         await replyMessage(replyToken, [
