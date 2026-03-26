@@ -1004,12 +1004,12 @@ function createReservationStartMessage() {
     );
   }
 
-  return withNavQuickReply(
+    return withNavQuickReply(
     {
       type: 'text',
       text:
-        `${STORE_NAME}のお弁当予約へようこそ🍱\n` +
-        `受取日と受取時間を選んでください。`,
+        `${STORE_NAME}のランチ弁当予約です！\n` +
+        `カレンダーから受取日と時間を選んでください🗓️`,
       quickReply: {
         items: [
           {
@@ -1026,7 +1026,6 @@ function createReservationStartMessage() {
     { includeBack: true, includeCancel: true }
   );
 }
-
   return withNavQuickReply(
     {
       type: 'text',
