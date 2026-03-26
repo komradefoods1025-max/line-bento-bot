@@ -2006,6 +2006,22 @@ function buildCartSummaryMessage(session) {
   );
 }
 
+function buildCartSummaryMessage(session) {
+  const items = Array.isArray(session?.items) ? session.items : [];
+  const orderLines = items.length ? formatOrderLines(items) : '（まだ商品が入っていません）';
+  const totalQty = getCartTotalQty(items);
+  const totalAmount = getCartTotalAmount(items);
+
+  return textMessage(
+    `現在のご注文内容です🧾\n\n` +
+      `受取日：${session?.date ? formatDateWithWeekday(session.date) : '-'}\n` +
+      `受取時間：${session?.time || '-'}\n` +
+      `ご注文内容：\n${orderLines}\n` +
+      `合計個数：${totalQty}個\n` +
+      `注文合計：¥${Number(totalAmount).toLocaleString('ja-JP')}`
+  );
+}
+
 function buildCartActionMessage() {
   return withNavQuickReply(
     {
@@ -2022,6 +2038,20 @@ function buildCartActionMessage() {
   );
 }
 
+function buildReservationChangedMessage(reservation) {
+  return textMessage(
+    `予約変更を受け付けました✨\n\n` +
+      `受付番号：${reservation.reservationNo}\n` +
+      `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+      `受取時間：${reservation.time}\n` +
+      `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
+      `合計個数：${reservation.totalQty}個\n` +
+      `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation.name}様\n` +
+      `電話番号：${reservation.phone}\n` +
+      `ステータス：${reservation.status}`
+  );
+}
 function buildReservationChangedMessage(reservation) {
   return textMessage(
     `予約変更を受け付けました✨\n\n` +
