@@ -1494,9 +1494,9 @@ function buildPhoneInputMessage() {
       quickReply: {
         items: [
           quickPostbackItem(
-            '電話番号を入力する',
+            '',
             'action=open_phone_input',
-            '電話番号を入力する',
+            '',
             {
               inputOption: 'openKeyboard',
               fillInText: ' '
@@ -1508,7 +1508,33 @@ function buildPhoneInputMessage() {
     { includeBack: true, includeCancel: true }
   );
 }
+function buildConfirmMessage(session) {
+  const items = Array.isArray(session?.items) ? session.items : [];
+  const orderLines = items.length ? formatOrderLines(items) : '（まだ商品が入っていません）';
+  const totalQty = getCartTotalQty(items);
+  const totalAmount = getCartTotalAmount(items);
 
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text:
+        `こちらの内容で予約を確定しますか？\n\n` +
+        `受取日：${session?.date ? formatDateWithWeekday(session.date) : '-'}\n` +
+        `受取時間：${session?.time || '-'}\n` +
+        `ご注文内容：\n${orderLines}\n` +
+        `合計個数：${totalQty}個\n` +
+        `注文合計：¥${Number(totalAmount).toLocaleString('ja-JP')}\n` +
+        `お名前：${session?.name || '-'}様\n` +
+        `電話番号：${session?.phone || '-'}`,
+      quickReply: {
+        items: [
+          quickPostbackItem('この内容で確定', 'action=confirm', 'この内容で確定')
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
+}
 function buildQtyMessage(itemName, itemType = 'food') {
   const icon = itemType === 'drink' ? '🥤' : '🍱';
   return withNavQuickReply(
