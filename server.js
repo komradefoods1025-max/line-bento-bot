@@ -1004,34 +1004,12 @@ function createReservationStartMessage() {
     );
   }
 
-    return withNavQuickReply(
-    {
-      type: 'text',
-      text:
-        `${STORE_NAME}のランチ弁当予約です！\n` +
-        `カレンダーから受取日と時間を選んでください🗓️`,
-      quickReply: {
-        items: [
-          {
-            type: 'action',
-            action: {
-              type: 'uri',
-              label: 'カレンダーを開く',
-              uri: `https://liff.line.me/${LIFF_ID}`
-            }
-          }
-        ]
-      }
-    },
-    { includeBack: true, includeCancel: true }
-  );
-}
   return withNavQuickReply(
     {
       type: 'text',
       text:
-        `${STORE_NAME}のランチ弁当予約です！\n` +
-        `カレンダーから受取日と時間を選んでください🗓️`,
+        `${STORE_NAME}のお弁当予約へようこそ🍱\n` +
+        `受取日と受取時間を選んでください。`,
       quickReply: {
         items: [
           {
@@ -1048,6 +1026,7 @@ function createReservationStartMessage() {
     { includeBack: true, includeCancel: true }
   );
 }
+
 function createDateSelectMessage() {
   if (!LIFF_ID) {
     return withNavQuickReply(
