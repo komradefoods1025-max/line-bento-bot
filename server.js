@@ -1905,7 +1905,6 @@ function buildChangePhoneInputMessage() {
   );
 }
 
-function buildReservationChangedMessage(reservation) {
 function buildCartSummaryMessage(session) {
   const items = Array.isArray(session?.items) ? session.items : [];
   const orderLines = items.length ? formatOrderLines(items) : '（まだ商品が入っていません）';
@@ -1937,6 +1936,8 @@ function buildCartActionMessage() {
     { includeBack: true, includeCancel: true }
   );
 }
+
+function buildReservationChangedMessage(reservation) {
   return textMessage(
     `予約変更を受け付けました✨\n\n` +
       `受付番号：${reservation.reservationNo}\n` +
