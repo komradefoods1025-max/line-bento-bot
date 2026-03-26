@@ -3094,20 +3094,20 @@ function buildEffectiveAvailableDates(rawDates, now = new Date()) {
     mergedDateSet.add(todayJst);
   }
 
-  return filterAvailableDatesByPickupTime([mergedDateSet], now);
+  return filterAvailableDatesByPickupTime(Array.from(mergedDateSet), now);
 }
 
 function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
   const normalizedDate = normalizeYmdDate(dateStr);
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
-    return [PICKUP_TIMES];
+    return PICKUP_TIMES;
   }
 
   const todayJst = getNowJstDateLabel(now);
 
   if (normalizedDate !== todayJst) {
-    return [PICKUP_TIMES];
+    return PICKUP_TIMES;
   }
 
   const threshold = new Date(now.getTime() + SAME_DAY_LEAD_MINUTES * 60 * 1000);
