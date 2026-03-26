@@ -11,8 +11,8 @@
     body {
       margin: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
-      background: #f6f7f9;
-      color: #222;
+      background: #f7f4ea;
+      color: #2f2a24;
     }
 
     .wrap {
@@ -22,34 +22,37 @@
     }
 
     .card {
-      background: #fff;
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      background: #fffdf7;
+      border-radius: 22px;
+      padding: 18px;
+      border: 1px solid #efe5c8;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
     }
 
     .title {
-      font-size: 22px;
-      font-weight: 700;
+      font-size: 24px;
+      font-weight: 800;
       margin-bottom: 6px;
+      letter-spacing: 0.02em;
     }
 
     .sub {
       font-size: 13px;
-      color: #666;
+      color: #7a6f60;
       margin-bottom: 16px;
-      line-height: 1.6;
+      line-height: 1.7;
     }
 
     .status {
       margin-bottom: 14px;
-      padding: 10px 12px;
-      border-radius: 12px;
+      padding: 11px 13px;
+      border-radius: 14px;
       font-size: 13px;
-      line-height: 1.6;
-      background: #f3f4f6;
-      color: #444;
+      line-height: 1.7;
+      background: #f4efe1;
+      color: #6b5f51;
       display: none;
+      border: 1px solid #eadfbb;
     }
 
     .status.show {
@@ -65,15 +68,17 @@
     .step {
       display: flex;
       gap: 8px;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
       flex-wrap: wrap;
     }
 
     .step span {
-      padding: 6px 10px;
+      padding: 7px 11px;
       border-radius: 999px;
-      background: #eef1f5;
+      background: #efe9d8;
       font-size: 12px;
+      font-weight: 700;
+      color: #6f6559;
     }
 
     .step .active {
@@ -86,17 +91,19 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .nav button {
       border: none;
-      background: #111;
+      background: #2f2a24;
       color: #fff;
-      padding: 9px 12px;
-      border-radius: 10px;
+      padding: 10px 13px;
+      border-radius: 12px;
       cursor: pointer;
       font-weight: 700;
+      font-size: 13px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
     }
 
     .nav button:disabled {
@@ -105,10 +112,11 @@
     }
 
     .month-label {
-      font-weight: 700;
-      font-size: 18px;
+      font-weight: 800;
+      font-size: 19px;
       text-align: center;
       flex: 1;
+      color: #2f2a24;
     }
 
     .weekdays,
@@ -121,14 +129,15 @@
     .weekdays div {
       text-align: center;
       font-size: 12px;
-      color: #777;
+      color: #7c7266;
       padding: 4px 0;
+      font-weight: 700;
     }
 
     .day,
     .blank {
-      min-height: 62px;
-      border-radius: 14px;
+      min-height: 64px;
+      border-radius: 16px;
     }
 
     .blank {
@@ -136,38 +145,50 @@
     }
 
     .day {
-      border: 1px solid #e2e6ea;
-      background: #fafbfc;
+      border: 1px solid #e8dfc7;
+      background: #faf7ef;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
       position: relative;
       padding: 0;
       font-size: 16px;
+      color: #2f2a24;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    .day:not(.disabled):active {
+      transform: scale(0.98);
     }
 
     .day.disabled {
-      color: #c0c4c9;
-      background: #f1f3f5;
+      color: #c0b8ad;
+      background: #f0ece5;
       cursor: not-allowed;
     }
 
     .day.available {
-      background: #fff;
-      border: 2px solid #06c75533;
+      background: #fffdf7;
+      border: 2px solid rgba(6, 199, 85, 0.18);
+    }
+
+    .day.today {
+      outline: 2px solid #d7a928;
+      outline-offset: -2px;
     }
 
     .day.selected {
       background: #06c755;
       color: #fff;
       border-color: #06c755;
+      box-shadow: 0 8px 18px rgba(6, 199, 85, 0.24);
     }
 
     .day .marker {
       position: absolute;
-      bottom: 6px;
+      bottom: 7px;
       left: 50%;
       transform: translateX(-50%);
       width: 6px;
@@ -183,7 +204,7 @@
     .section {
       margin-top: 18px;
       padding-top: 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid #eee2c6;
     }
 
     .hidden {
@@ -192,7 +213,7 @@
 
     .confirm-box,
     .final-box {
-      border-radius: 14px;
+      border-radius: 16px;
       padding: 14px;
     }
 
@@ -203,9 +224,9 @@
 
     .confirm-date {
       font-size: 18px;
-      font-weight: 700;
+      font-weight: 800;
       margin-bottom: 12px;
-      line-height: 1.5;
+      line-height: 1.6;
     }
 
     .btn-row {
@@ -218,7 +239,7 @@
       border: none;
       border-radius: 12px;
       padding: 12px 14px;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
     }
 
@@ -228,8 +249,8 @@
     }
 
     .btn-secondary {
-      background: #eceff3;
-      color: #222;
+      background: #ece7dc;
+      color: #2f2a24;
     }
 
     .time-grid {
@@ -240,21 +261,27 @@
     }
 
     .time-btn {
-      border: 1px solid #dfe4ea;
-      background: #fff;
+      border: 1px solid #e4dcc7;
+      background: #fffdf7;
       border-radius: 14px;
       padding: 14px 10px;
       text-align: center;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
       line-height: 1.2;
-      min-height: 54px;
+      min-height: 56px;
+      color: #2f2a24;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .time-btn:active {
+      transform: scale(0.98);
     }
 
     .time-btn.selected {
-      background: #06c755;
-      color: #fff;
-      border-color: #06c755;
+      background: #f2c94c;
+      color: #2f2a24;
+      border-color: #f2c94c;
     }
 
     .time-btn small {
@@ -262,7 +289,7 @@
       margin-top: 4px;
       font-size: 11px;
       opacity: 0.75;
-      font-weight: 500;
+      font-weight: 600;
     }
 
     .final-box {
@@ -274,6 +301,7 @@
     .final-box strong {
       display: block;
       margin-bottom: 8px;
+      font-size: 15px;
     }
 
     .send-area {
@@ -284,12 +312,13 @@
       width: 100%;
       border: none;
       border-radius: 14px;
-      background: #111;
+      background: #2f2a24;
       color: #fff;
       padding: 14px;
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.10);
     }
 
     .send-area button:disabled {
@@ -301,15 +330,67 @@
       margin-top: 16px;
       padding: 16px;
       border-radius: 14px;
-      background: #f9fafb;
-      border: 1px dashed #d1d5db;
-      color: #666;
+      background: #f9f7f1;
+      border: 1px dashed #d8ccb0;
+      color: #6f6559;
       line-height: 1.7;
       display: none;
     }
 
     .empty-box.show {
       display: block;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(255, 253, 247, 0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .loading-overlay.is-hidden {
+      display: none;
+    }
+
+    .loading-card {
+      background: #fffdf7;
+      border: 1px solid #efe5c8;
+      border-radius: 20px;
+      padding: 22px 24px;
+      min-width: 220px;
+      text-align: center;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+    }
+
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 4px solid #eadfbb;
+      border-top-color: #d7a928;
+      border-radius: 50%;
+      margin: 0 auto 12px;
+      animation: spin 0.9s linear infinite;
+    }
+
+    .loading-title {
+      font-size: 17px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      color: #2f2a24;
+    }
+
+    .loading-text {
+      font-size: 13px;
+      color: #7a6f60;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     @media (max-width: 520px) {
@@ -338,6 +419,14 @@
   </style>
 </head>
 <body>
+  <div id="loadingOverlay" class="loading-overlay is-hidden">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <div class="loading-title" id="loadingTitle">読み込み中…</div>
+      <div class="loading-text" id="loadingText">少し待ってね</div>
+    </div>
+  </div>
+
   <div class="wrap">
     <div class="card">
       <div class="title" id="titleText">受取日時を選択</div>
@@ -376,7 +465,7 @@
       </div>
 
       <div class="section hidden" id="timeSection">
-        <div style="font-weight:700; font-size:18px;">受取時間を選択</div>
+        <div style="font-weight:800; font-size:18px;">受取時間を選択</div>
         <div class="sub" id="timeSubText">時間をお選びください</div>
         <div class="time-grid" id="timeGrid"></div>
 
@@ -451,6 +540,9 @@
     const finalBox = document.getElementById("finalBox");
     const finalText = document.getElementById("finalText");
     const sendBtn = document.getElementById("sendBtn");
+    const loadingOverlay = document.getElementById("loadingOverlay");
+    const loadingTitle = document.getElementById("loadingTitle");
+    const loadingText = document.getElementById("loadingText");
 
     document.getElementById("prevBtn").addEventListener("click", () => {
       currentDate.setMonth(currentDate.getMonth() - 1);
@@ -462,22 +554,29 @@
       renderCalendar();
     });
 
-    document.getElementById("confirmDateBtn").addEventListener("click", () => {
-      const slots = getTimeSlotsForDate(selectedDate);
+    document.getElementById("confirmDateBtn").addEventListener("click", async () => {
+      try {
+        setLoading(true, "時間を確認中…", "少し待ってね");
+        await wait(120);
 
-      if (!slots.length) {
-        timeSection.classList.add("hidden");
-        finalBox.classList.add("hidden");
-        sendBtn.disabled = true;
-        showStatus("その日の受付可能時間はありません。別日を選んでください。", true);
-        return;
+        const slots = getTimeSlotsForDate(selectedDate);
+
+        if (!slots.length) {
+          timeSection.classList.add("hidden");
+          finalBox.classList.add("hidden");
+          sendBtn.disabled = true;
+          showStatus("その日の受付可能時間はありません。別日を選んでください。", true);
+          return;
+        }
+
+        timeSection.classList.remove("hidden");
+        timeSubText.textContent = buildTimeSubText(selectedDate);
+        renderTimeSlots();
+        setStep(3);
+        hideStatus();
+      } finally {
+        setLoading(false);
       }
-
-      timeSection.classList.remove("hidden");
-      timeSubText.textContent = buildTimeSubText(selectedDate);
-      renderTimeSlots();
-      setStep(3);
-      hideStatus();
     });
 
     document.getElementById("reselectDateBtn").addEventListener("click", () => {
@@ -495,7 +594,7 @@
 
       try {
         sendBtn.disabled = true;
-        showStatus("送信しています…");
+        setLoading(true, "送信中…", "少し待ってね");
         await liff.sendMessages([
           {
             type: "text",
@@ -506,12 +605,16 @@
       } catch (err) {
         showStatus(`送信に失敗しました。${err?.message || err}`, true);
         sendBtn.disabled = false;
+      } finally {
+        setLoading(false);
       }
     });
 
     async function initPage() {
       try {
+        setLoading(true, "読み込み中…", "少し待ってね");
         showStatus("営業日を読み込んでいます…");
+
         const config = await fetchConfig();
 
         liffId = config.liffId || "";
@@ -567,6 +670,8 @@
       } catch (err) {
         console.error(err);
         showStatus(`初期化に失敗しました。${err?.message || err}`, true);
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -634,6 +739,11 @@
         cell.textContent = day;
 
         const isAvailable = availableDates.has(dateStr) && getTimeSlotsForDate(dateStr).length > 0;
+        const isToday = todayJst && dateStr === todayJst;
+
+        if (isToday) {
+          cell.classList.add("today");
+        }
 
         if (!isAvailable) {
           cell.classList.add("disabled");
@@ -694,15 +804,22 @@
           btn.classList.add("selected");
         }
 
-        btn.addEventListener("click", () => {
-          selectedTime = time;
-          renderTimeSlots();
+        btn.addEventListener("click", async () => {
+          try {
+            setLoading(true, "確認中…", "少し待ってね");
+            await wait(120);
 
-          finalBox.classList.remove("hidden");
-          finalText.textContent = `${formatDateJP(selectedDate)} / ${selectedTime}`;
-          sendBtn.disabled = false;
-          setStep(4);
-          hideStatus();
+            selectedTime = time;
+            renderTimeSlots();
+
+            finalBox.classList.remove("hidden");
+            finalText.textContent = `${formatDateJP(selectedDate)} / ${selectedTime}`;
+            sendBtn.disabled = false;
+            setStep(4);
+            hideStatus();
+          } finally {
+            setLoading(false);
+          }
         });
 
         timeGrid.appendChild(btn);
@@ -748,6 +865,23 @@
     function hideStatus() {
       statusBox.textContent = "";
       statusBox.className = "status";
+    }
+
+    function setLoading(visible, title = "読み込み中…", text = "少し待ってね") {
+      if (!loadingOverlay) return;
+
+      loadingTitle.textContent = title;
+      loadingText.textContent = text;
+
+      if (visible) {
+        loadingOverlay.classList.remove("is-hidden");
+      } else {
+        loadingOverlay.classList.add("is-hidden");
+      }
+    }
+
+    function wait(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
     function normalizeDate(str) {
