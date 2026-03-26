@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-26-liiffix-15';
+const APP_VERSION = '2026-03-26-liiffix-16';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -943,6 +943,20 @@ if (isReviewText(text)) {
     }
   }
 }
+function buildReservationCompleteMessage(reservation) {
+  return textMessage(
+    `ご予約ありがとうございます✨\n\n` +
+      `受付番号：${reservation.reservationNo}\n` +
+      `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+      `受取時間：${reservation.time}\n` +
+      `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
+      `合計個数：${reservation.totalQty}個\n` +
+      `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation.name}様\n` +
+      `電話番号：${reservation.phone}\n\n` +
+      `ご来店をお待ちしています😊`
+  );
+}
 async function beginReservationFlow(replyToken, userId) {
   clearSession(userId);
   await clearPendingSession(userId);
@@ -981,14 +995,37 @@ function createReservationStartMessage() {
   if (!LIFF_ID) {
     return withNavQuickReply(
       textMessage(
-        `${STORE_NAME}のランチ弁当予約です！\n` +
-        `カレンダーから受取日と時間を選んでください🗓️\n\n` +
+        `${STORE_NAME}のお弁当予約へようこそ🍱\n` +
+        `受取日と受取時間を選んでください。\n\n` +
         `受取希望日を YYYY-MM-DD 形式で送ってください。\n` +
-        `例：2026-03-24`
+        `例：2026-03-26`
       ),
       { includeBack: true, includeCancel: true }
     );
   }
+
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text:
+        `${STORE_NAME}のお弁当予約へようこそ🍱\n` +
+        `受取日と受取時間を選んでください。`,
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: {
+              type: 'uri',
+              label: 'カレンダーを開く',
+              uri: `https://liff.line.me/${LIFF_ID}`
+            }
+          }
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
+}
 
   return withNavQuickReply(
     {
@@ -1015,7 +1052,10 @@ function createReservationStartMessage() {
 function createDateSelectMessage() {
   if (!LIFF_ID) {
     return withNavQuickReply(
-      textMessage('受取希望日を YYYY-MM-DD 形式で送ってください。\n例：2026-03-24'),
+      textMessage(
+        '受取希望日を入力してください📅\n' +
+        '例：2026-03-26'
+      ),
       { includeBack: true, includeCancel: true }
     );
   }
@@ -1023,7 +1063,7 @@ function createDateSelectMessage() {
   return withNavQuickReply(
     {
       type: 'text',
-      text: '受取希望日をカレンダーから選んでください👇',
+      text: '受取希望日をカレンダーから選んでください📅',
       quickReply: {
         items: [
           {
@@ -1205,7 +1245,7 @@ function buildTimeMessage(selectedDate = '') {
 
   if (!availableTimes.length) {
     return withNavQuickReply(
-      textMessage('現在選べる受取時間がありません。別日を選んでください。'),
+      textMessage('この日は選べる受取時間がありません。別日を選んでください🙏'),
       { includeBack: true, includeCancel: true }
     );
   }
@@ -1215,8 +1255,7 @@ function buildTimeMessage(selectedDate = '') {
       type: 'text',
       text:
         selectedDate && selectedDate === getNowJstDateLabel()
-          ? `受取時間を選んでください⏰
-※本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降から選べます`
+          ? `受取時間を選んでください⏰\n※本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降から選べます`
           : '受取時間を選んでください⏰',
       quickReply: {
         items: availableTimes.map((time) =>
@@ -1433,7 +1472,7 @@ function buildLargeRiceMessage(menuName) {
   return withNavQuickReply(
     {
       type: 'text',
-      text: `${menuName}ですね！\nご飯の量を選んでください🍚`,
+      text: `${menuName}ですね🍱\nご飯の量を選んでください🍚`,
       quickReply: {
         items: [
           quickPostbackItem('小盛り', 'action=rice_size&value=small', 'ご飯は小盛り'),
@@ -1450,12 +1489,11 @@ function buildDrinkConfirmMessage(menuName) {
   return withNavQuickReply(
     {
       type: 'text',
-      text: `${menuName}ですね！
-ドリンクはお付けしますか🥤？`,
+      text: `${menuName}にドリンクを付けますか？🥤`,
       quickReply: {
         items: [
-          quickPostbackItem('はい', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
-          quickPostbackItem('いいえ', 'action=drink_confirm&value=no', 'ドリンクは付けない')
+          quickPostbackItem('付ける', 'action=drink_confirm&value=yes', 'ドリンクを付ける'),
+          quickPostbackItem('付けない', 'action=drink_confirm&value=no', 'ドリンクは付けない')
         ]
       }
     },
@@ -1467,7 +1505,7 @@ function buildNameInputMessage() {
   return withNavQuickReply(
     {
       type: 'text',
-      text: 'ご予約名を入力してください👤',
+      text: 'ご予約名を入力してください👤\n受け取りされる方のお名前でお願いします。',
       quickReply: {
         items: [
           quickPostbackItem(
@@ -1490,7 +1528,7 @@ function buildPhoneInputMessage() {
   return withNavQuickReply(
     {
       type: 'text',
-      text: '電話番号を入力してください🤙\n例：09012345678',
+      text: 'ご連絡先の電話番号を入力してください📞\n例：09012345678',
       quickReply: {
         items: [
           quickPostbackItem(
@@ -1518,7 +1556,7 @@ function buildConfirmMessage(session) {
     {
       type: 'text',
       text:
-        `こちらの内容で予約を確定しますか？\n\n` +
+        `こちらの内容で予約を確定しますか？✨\n\n` +
         `受取日：${session?.date ? formatDateWithWeekday(session.date) : '-'}\n` +
         `受取時間：${session?.time || '-'}\n` +
         `ご注文内容：\n${orderLines}\n` +
