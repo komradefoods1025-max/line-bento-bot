@@ -1494,9 +1494,9 @@ function buildPhoneInputMessage() {
       quickReply: {
         items: [
           quickPostbackItem(
-            '',
+            '電話番号を入力する',
             'action=open_phone_input',
-            '',
+            '電話番号を入力する',
             {
               inputOption: 'openKeyboard',
               fillInText: ' '
