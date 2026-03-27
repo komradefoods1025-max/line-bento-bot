@@ -997,7 +997,7 @@ async function beginReservationFlow(replyToken, userId) {
 
   await savePendingSession(userId, session);
 
-  await replyMessage(replyToken, [createReservationStartMessage()]);
+  await replyMessage(replyToken, [createDateSelectMessage()]);
 }
 function createReservationStartMessage() {
   if (!LIFF_ID) {
