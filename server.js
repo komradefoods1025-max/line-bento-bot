@@ -35,7 +35,8 @@ const CHANGE_REVIEW_ACTION = 'change_review';
 const CHANGE_CONFIRM_ACTION = 'change_confirm';
 const CHANGE_ITEMS_ACTION = 'change_items';
 const CHANGE_ADD_ITEMS_ACTION = 'change_add_items';
-
+const CHANGE_CANCEL_REQUEST_ACTION = 'change_cancel_request';
+const CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION = 'change_cancel_confirm_reservation';
 const DAILY_MENU_KEY = 'daily_menu';
 const EXTRA_KARAAGE_KEY = 'extra_karaage';
 const DRINK_KEY_PREFIX = 'drink_';
@@ -632,7 +633,32 @@ if (isReviewText(text)) {
       ]);
       return;
     }
+if (data.action === CHANGE_CANCEL_REQUEST_ACTION) {
+  await replyMessage(replyToken, [
+    withNavQuickReply(
+      {
+        type: 'text',
+        text: 'この予約自体をキャンセルしますか？\n※この操作でご予約は取り消しになります。',
+        quickReply: {
+          items: [
+            quickPostbackItem(
+              'はい、キャンセルする',
+              `action=${CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION}`,
+              'はい、キャンセルする'
+            )
+          ]
+        }
+      },
+      { includeBack: true, includeCancel: false }
+    )
+  ]);
+  return;
+}
 
+if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
+  await handleReservationCancelConfirm(replyToken, userId, session);
+  return;
+}
     if (data.action === CHANGE_CONFIRM_ACTION) {
       await handleReservationChangeConfirm(replyToken, userId, session);
       return;
@@ -1478,11 +1504,39 @@ function buildDrinkBubble(drink) {
   };
 }
 
+function getRiceGuideText(menuName) {
+  switch (menuName) {
+    case 'からあげ弁当':
+      return (
+        'からあげ弁当ですね！\n' +
+        'ジューシーから揚げが4個入りのボリューム満点のお弁当です😋\n' +
+        'ご飯の量を選んでください🍚'
+      );
+
+    case '生姜焼き弁当':
+      return (
+        '生姜焼き弁当ですね！\n' +
+        'かむらど特製の生姜焼き弁当を是非お試し下さい😋\n' +
+        'ご飯の量を選んでください🍚'
+      );
+
+    case 'チキン南蛮弁当':
+      return (
+        'チキン南蛮弁当ですね！\n' +
+        'かむらど特製タルタルソースが絶品のお弁当です😋\n' +
+        'ご飯の量を選んでください🍚'
+      );
+
+    default:
+      return `${menuName}ですね🍱\nご飯の量を選んでください🍚`;
+  }
+}
+
 function buildLargeRiceMessage(menuName) {
   return withNavQuickReply(
     {
       type: 'text',
-      text: `${menuName}ですね🍱\nご飯の量を選んでください🍚`,
+      text: getRiceGuideText(menuName),
       quickReply: {
         items: [
           quickPostbackItem('小盛り', 'action=rice_size&value=small', 'ご飯は小盛り'),
@@ -1930,6 +1984,17 @@ function buildChangeMenuMessage(session) {
               label: '変更確定',
               data: `action=${CHANGE_CONFIRM_ACTION}`,
               displayText: '変更確定'
+            }
+          },
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '予約自体をキャンセル',
+              data: `action=${CHANGE_CANCEL_REQUEST_ACTION}`,
+              displayText: '予約自体をキャンセル'
             }
           },
           {
@@ -2802,28 +2867,33 @@ async function fetchLatestReservation(userId) {
   }
 }
 
-async function updateReservationOnSheet(reservation) {
+async function cancelReservationOnSheet(reservation) {
   try {
+    const items = Array.isArray(reservation.items) ? reservation.items : [];
+
     const url = buildReservationApiUrl({
-      action: 'updateReservation',
+      action: 'cancelReservation',
       reservationNo: reservation.reservationNo,
       userId: reservation.userId,
       date: reservation.date,
       time: reservation.time,
       name: reservation.name,
       phone: reservation.phone,
-      status: reservation.status,
-      updatedAt: reservation.updatedAt,
-      itemsJson: JSON.stringify(reservation.items),
-      itemCount: String(reservation.itemCount),
-      totalQty: String(reservation.totalQty),
-      total: String(reservation.total),
-      orderLines: formatOrderLines(reservation.items),
-      foodLines: formatFoodLines(reservation.items),
-      drinkLines: formatDrinkLines(reservation.items),
-      hasDrink: hasDrinkItems(reservation.items) ? 'yes' : 'no',
-      hasLargeRice: getLargeRiceQty(reservation.items) > 0 ? 'yes' : 'no',
-      largeRiceQty: String(getLargeRiceQty(reservation.items))
+      status: reservation.status || 'キャンセル済み',
+      canceledAt: reservation.canceledAt || '',
+      updatedAt: reservation.updatedAt || '',
+      itemsJson: JSON.stringify(items),
+      itemCount: String(reservation.itemCount || 0),
+      totalQty: String(reservation.totalQty || 0),
+      total: String(reservation.total || 0),
+      orderLines: formatOrderLines(items),
+      foodLines: formatFoodLines(items),
+      drinkLines: formatDrinkLines(items),
+      hasDrink: hasDrinkItems(items) ? 'yes' : 'no',
+      hasLargeRice: getLargeRiceQty(items) > 0 ? 'yes' : 'no',
+      largeRiceQty: String(getLargeRiceQty(items)),
+      notifyMail: 'yes',
+      notifyType: 'cancel'
     });
 
     const response = await fetch(url);
@@ -2832,10 +2902,72 @@ async function updateReservationOnSheet(reservation) {
     if (!response.ok) return { ok: false, error: text };
 
     const json = JSON.parse(text);
-    return json.ok ? { ok: true } : { ok: false, error: json.error || 'update error' };
+    return json.ok ? { ok: true } : { ok: false, error: json.error || 'cancel error' };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
+}
+
+function buildReservationCanceledMessage(reservation) {
+  return textMessage(
+    `ご予約のキャンセルを受け付けました。\n\n` +
+      `受付番号：${reservation.reservationNo}\n` +
+      `受取日：${reservation.date ? formatDateWithWeekday(reservation.date) : '-'}\n` +
+      `受取時間：${reservation.time || '-'}\n` +
+      `ご注文内容：\n${formatOrderLines(reservation.items || [])}\n` +
+      `お名前：${reservation.name || '-'}様\n` +
+      `電話番号：${formatPhoneForDisplay(reservation.phone || '')}\n` +
+      `ステータス：${reservation.status || 'キャンセル済み'}`
+  );
+}
+
+async function handleReservationCancelConfirm(replyToken, userId, session) {
+  if (!session?.editingReservationNo) {
+    await replyMessage(replyToken, [
+      textMessage('キャンセル対象の予約が見つかりません。もう一度お試しください。')
+    ]);
+    return;
+  }
+
+  const items = Array.isArray(session.items) ? session.items.map((item) => ({ ...item })) : [];
+  const canceledAt = getJstDateTimeLabel();
+
+  const reservation = {
+    reservationNo: session.editingReservationNo,
+    userId,
+    date: session.date,
+    time: session.time,
+    items,
+    itemCount: items.length,
+    totalQty: getCartTotalQty(items),
+    total: getCartTotalAmount(items),
+    name: session.name,
+    phone: session.phone,
+    status: 'キャンセル済み',
+    canceledAt,
+    updatedAt: canceledAt
+  };
+
+  const saveResult = await cancelReservationOnSheet(reservation);
+
+  if (!saveResult.ok) {
+    await replyMessage(replyToken, [
+      textMessage(`予約キャンセルの保存でエラーが起きました。\n${saveResult.error || 'unknown error'}`)
+    ]);
+    return;
+  }
+
+  notifyStoreByLine({
+    reservation,
+    createdAt: canceledAt,
+    totalQty: reservation.totalQty,
+    total: reservation.total
+  }).catch((err) => console.error('store line notify error:', err));
+
+  clearSession(userId);
+  await clearPendingSession(userId);
+
+  await replyMessage(replyToken, [buildReservationCanceledMessage(reservation)]);
 }
 function buildLatestReservationMessage(reservation) {
   const items = Array.isArray(reservation?.items) ? reservation.items : [];
