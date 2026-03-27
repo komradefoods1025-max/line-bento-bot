@@ -294,11 +294,15 @@ async function handleRichMenuEntry(event, replyToken, userId) {
   if (!intent || !userId) return false;
 
   if (intent === 'view') {
+    await startLineLoading(userId, 5);
+    await sleep(900);
     await handleViewLatestReservation(replyToken, userId);
     return true;
   }
 
   if (intent === 'change') {
+    await startLineLoading(userId, 5);
+    await sleep(900);
     await beginReservationChangeFlow(replyToken, userId);
     return true;
   }
