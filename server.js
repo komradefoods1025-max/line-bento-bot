@@ -371,26 +371,16 @@ async function handleEvent(event) {
     }
 
     if (isReservationViewText(text)) {
-      await handleViewLatestReservation(replyToken, userId);
-      return;
-    }
-
-    if (isReservationChangeText(text)) {
-      await beginReservationChangeFlow(replyToken, userId);
-      return;
-    }
-
-    if (isReservationStartText(text)) {
   await startLineLoading(userId, 5);
-  await sleep(1200);
-  await beginReservationFlow(replyToken, userId);
+  await sleep(900);
+  await handleViewLatestReservation(replyToken, userId);
   return;
 }
 
-if (isResetText(text)) {
+if (isReservationChangeText(text)) {
   await startLineLoading(userId, 5);
-  await sleep(1200);
-  await beginReservationFlow(replyToken, userId);
+  await sleep(900);
+  await beginReservationChangeFlow(replyToken, userId);
   return;
 }
 
@@ -964,6 +954,36 @@ function buildReservationCompleteMessage(reservation) {
       `電話番号：${reservation.phone}\n\n` +
       `ご来店をお待ちしています😊`
   );
+}
+async function startLineLoading(userId, loadingSeconds = 5) {
+  const seconds = Math.max(5, Math.min(60, Number(loadingSeconds) || 5));
+
+  if (!userId || !CHANNEL_ACCESS_TOKEN) return;
+
+  try {
+    const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify({
+        chatId: userId,
+        loadingSeconds: seconds
+      })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('startLineLoading error:', response.status, text);
+    }
+  } catch (err) {
+    console.error('startLineLoading error:', err);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 async function beginReservationFlow(replyToken, userId) {
   clearSession(userId);
