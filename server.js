@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-26-liiffix-16';
+const APP_VERSION = '2026-03-27-liiffix-17';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -381,25 +381,31 @@ async function handleEvent(event) {
     }
 
     if (isReservationStartText(text)) {
-      await beginReservationFlow(replyToken, userId);
-      return;
-    }
+  await startLineLoading(userId, 5);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
 
-    if (isResetText(text)) {
-      await beginReservationFlow(replyToken, userId);
-      return;
-    }
+if (isResetText(text)) {
+  await startLineLoading(userId, 5);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
 
     if (isResumeText(text)) {
-      if (hasActiveSession(session)) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, buildResumeMessages(session));
-        return;
-      }
+  if (hasActiveSession(session)) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, buildResumeMessages(session));
+    return;
+  }
 
-      await beginReservationFlow(replyToken, userId);
-      return;
-    }
+  await startLineLoading(userId, 5);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
 
     if (hasActiveSession(session) && isBackText(text)) {
       await handleBackAction(replyToken, userId, session);
@@ -533,9 +539,11 @@ if (isReviewText(text)) {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
-      await beginReservationFlow(replyToken, userId);
-      return;
-    }
+  await startLineLoading(userId, 5);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
 
     if (data.action === 'begin_change') {
       await beginReservationChangeFlow(replyToken, userId);
@@ -3145,6 +3153,36 @@ async function runPendingReminderJob() {
 }
 
 async function notifyStoreByLine(reservation) {
+async function startLineLoading(userId, loadingSeconds = 5) {
+  const seconds = Math.max(5, Math.min(60, Number(loadingSeconds) || 5));
+
+  if (!userId || !CHANNEL_ACCESS_TOKEN) return;
+
+  try {
+    const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify({
+        chatId: userId,
+        loadingSeconds: seconds
+      })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('startLineLoading error:', response.status, text);
+    }
+  } catch (err) {
+    console.error('startLineLoading error:', err);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
   if (!STORE_NOTIFY_LINE_ID) return;
 
   const response = await fetch('https://api.line.me/v2/bot/message/push', {
