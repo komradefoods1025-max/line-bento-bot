@@ -2766,95 +2766,100 @@ function getCartTotalQty(items) {
 }
 
 function reservationFromApiRow(row) {
-  const raw = row || {};
+const raw = row || {};
 
-  const items =
-    Array.isArray(raw.items)
-      ? raw.items
-      : safeJsonParse(
-          raw.itemsJson ||
-            raw.items_json ||
-            raw.orderItemsJson ||
-            raw.order_items_json ||
-            '[]',
-          []
-        );
+const items =
+Array.isArray(raw.items)
+? raw.items
+: safeJsonParse(
+raw.itemsJson ||
+raw.items_json ||
+'[]',
+[]
+);
 
-  const dateValue =
-    raw.date ||
-    raw.pickupDate ||
-    raw.pickup_date ||
-    raw.reservationDate ||
-    raw.reservation_date ||
-    '';
+const dateValue =
+raw.date ||
+raw.pickupDate ||
+raw.pickup_date ||
+raw.reservationDate ||
+raw.reservation_date ||
+'';
 
-  const timeValue =
-    raw.time ||
-    raw.pickupTime ||
-    raw.pickup_time ||
-    raw.reservationTime ||
-    raw.reservation_time ||
-    '';
+const timeValue =
+raw.time ||
+raw.pickupTime ||
+raw.pickup_time ||
+raw.reservationTime ||
+raw.reservation_time ||
+'';
 
-  return {
-    reservationNo:
-      raw.reservationNo ||
-      raw.reservation_no ||
-      raw.reservationId ||
-      raw.reservation_id ||
-      raw.id ||
-      '',
-    userId:
-      raw.userId ||
-      raw.user_id ||
-      '',
-    date: normalizeYmdDate(dateValue),
-    time: String(timeValue || '').slice(0, 5),
-    items: Array.isArray(items) ? items : [],
-    itemCount: Number(
-      raw.itemCount ||
-        raw.item_count ||
-        (Array.isArray(items) ? items.length : 0) ||
-        0
-    ),
-    totalQty: Number(
-      raw.totalQty ||
-        raw.total_qty ||
-        getCartTotalQty(items) ||
-        0
-    ),
-    total: Number(
-      raw.total ||
-        raw.amount ||
-        raw.totalAmount ||
-        raw.total_amount ||
-        getCartTotalAmount(items) ||
-        0
-    ),
-    name:
-      raw.name ||
-      raw.customerName ||
-      raw.customer_name ||
-      '',
-    phone:
-      raw.phone ||
-      raw.phoneNumber ||
-      raw.phone_number ||
-      '',
-    status:
-      raw.status ||
-      raw.reservationStatus ||
-      raw.reservation_status ||
-      '',
-    createdAt:
-      raw.createdAt ||
-      raw.created_at ||
-      '',
-    orderLines:
-      raw.orderLines ||
-      raw.order_lines ||
-      formatOrderLines(items)
-  };
+const orderLinesText =
+raw.orderLines ||
+raw.order_lines ||
+'';
+
+return {
+reservationNo:
+raw.reservationNo ||
+raw.reservation_no ||
+raw.reservationId ||
+raw.reservation_id ||
+raw.id ||
+'',
+userId:
+raw.userId ||
+raw.user_id ||
+'',
+date: normalizeYmdDate(dateValue),
+time: String(timeValue || '').slice(0, 5),
+items: Array.isArray(items) ? items : [],
+itemCount: Number(
+raw.itemCount ||
+raw.item_count ||
+(Array.isArray(items) ? items.length : 0) ||
+0
+),
+totalQty: Number(
+raw.totalQty ||
+raw.total_qty ||
+getCartTotalQty(items) ||
+0
+),
+total: Number(
+raw.total ||
+raw.amount ||
+raw.totalAmount ||
+raw.total_amount ||
+getCartTotalAmount(items) ||
+0
+),
+name:
+raw.name ||
+raw.customerName ||
+raw.customer_name ||
+'',
+phone:
+raw.phone ||
+raw.phoneNumber ||
+raw.phone_number ||
+'',
+status:
+raw.status ||
+raw.reservationStatus ||
+raw.reservation_status ||
+'',
+createdAt:
+raw.createdAt ||
+raw.created_at ||
+'',
+updatedAt:
+raw.updatedAt ||
+raw.updated_at ||
+'',
+orderLines:
+orderLinesText
+};
 }
 
 function getCartTotalAmount(items) {
@@ -2921,53 +2926,35 @@ function withMenuDefaults(menu) {
   };
 }
 async function fetchLatestReservation(userId) {
-  try {
-    const url = buildReservationApiUrl({
-      action: 'getLatestReservation',
-      userId
-    });
+try {
+const url = buildReservationApiUrl({
+action: 'getLatestReservation',
+userId
+});
 
-    const response = await fetch(url);
-    const text = await response.text();
+const response = await fetch(url);
+const text = await response.text();
 
-    if (!response.ok) {
-      return { ok: false, found: false, error: text };
-    }
+if (!response.ok) {
+return { ok: false, found: false, error: text };
+}
 
-    const json = JSON.parse(text);
+const json = JSON.parse(text);
 
-    if (!json.ok || !json.found) {
-      return { ok: true, found: false };
-    }
+if (!json.ok || !json.found) {
+return { ok: true, found: false };
+}
 
-    const reservation = {
-      reservationNo: json.reservationNo || json.reservation_id || '',
-      userId: json.userId || userId || '',
-      date: normalizeYmdDate(json.date || json.pickupDate || ''),
-      time: String(json.time || json.pickupTime || '').slice(0, 5),
-      items: Array.isArray(json.items)
-        ? json.items
-        : safeParseJsonArray(json.itemsJson),
-      itemCount: Number(json.itemCount || 0),
-      totalQty: Number(json.totalQty || 0),
-      total: Number(json.total || 0),
-      name: json.name || '',
-      phone: json.phone || '',
-      status: json.status || '受付済み'
-    };
+const reservation = reservationFromApiRow(json.reservation || json);
 
-    return {
-      ok: true,
-      found: true,
-      reservation
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      found: false,
-      error: String(err)
-    };
-  }
+return {
+ok: true,
+found: true,
+reservation
+};
+} catch (err) {
+return { ok: false, found: false, error: String(err) };
+}
 }
 
 function safeParseJsonArray(value) {
@@ -3257,28 +3244,33 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
   await replyMessage(replyToken, [buildReservationCanceledMessage(reservation)]);
 }
 function buildLatestReservationMessage(reservation) {
-  const items = Array.isArray(reservation?.items) ? reservation.items : [];
-  const totalQty =
-    reservation?.totalQty != null && reservation.totalQty !== ''
-      ? Number(reservation.totalQty)
-      : getCartTotalQty(items);
-  const totalAmount =
-    reservation?.total != null && reservation.total !== ''
-      ? Number(reservation.total)
-      : getCartTotalAmount(items);
+const items = Array.isArray(reservation?.items) ? reservation.items : [];
+const totalQty =
+reservation?.totalQty != null && reservation.totalQty !== ''
+? Number(reservation.totalQty)
+: getCartTotalQty(items);
+const totalAmount =
+reservation?.total != null && reservation.total !== ''
+? Number(reservation.total)
+: getCartTotalAmount(items);
 
-  return textMessage(
-    `現在のご予約内容です📋\n\n` +
-      `受付番号：${reservation?.reservationNo || '-'}\n` +
-      `受取日：${reservation?.date ? formatDateWithWeekday(reservation.date) : '-'}\n` +
-      `受取時間：${reservation?.time || '-'}\n` +
-      `ご注文内容：\n${formatOrderLines(items)}\n` +
-      `合計個数：${totalQty}個\n` +
-      `注文合計：¥${Number(totalAmount).toLocaleString('ja-JP')}\n` +
-      `お名前：${reservation?.name || '-'}様\n` +
-      `電話番号：${formatPhoneForDisplay(reservation?.phone || '')}\n` +
-      `ステータス：${reservation?.status || '受付済み'}`
-  );
+const orderText =
+reservation?.orderLines && String(reservation.orderLines).trim()
+? String(reservation.orderLines)
+: formatOrderLines(items);
+
+return textMessage(
+`現在のご予約内容です📋\n\n` +
+`受付番号：${reservation?.reservationNo || '-'}\n` +
+`受取日：${reservation?.date ? formatDateWithWeekday(reservation.date) : '-'}\n` +
+`受取時間：${reservation?.time || '-'}\n` +
+`ご注文内容：\n${orderText}\n` +
+`合計個数：${totalQty}個\n` +
+`注文合計：¥${Number(totalAmount).toLocaleString('ja-JP')}\n` +
+`お名前：${reservation?.name || '-'}様\n` +
+`電話番号：${formatPhoneForDisplay(reservation?.phone || '')}\n` +
+`ステータス：${reservation?.status || '受付済み'}`
+);
 }
 async function handleViewLatestReservation(replyToken, userId) {
   const result = await fetchLatestReservation(userId);
