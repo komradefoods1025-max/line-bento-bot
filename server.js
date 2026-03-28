@@ -16,7 +16,7 @@ const APP_VERSION = '2026-03-27-liiffix-17';
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
 const TIME_ZONE = 'Asia/Tokyo';
-const BOOKABLE_DATE_COUNT = 7;
+const BOOKABLE_DATE_COUNT = 31;
 
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
