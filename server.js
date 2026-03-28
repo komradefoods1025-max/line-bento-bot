@@ -2848,7 +2848,7 @@ function withMenuDefaults(menu) {
   };
 }
 
-async function updateReservationOnSheet(reservation) {
+async function saveReservationToSheet(reservation) {
   try {
     const items = Array.isArray(reservation.items) ? reservation.items : [];
     const orderLines = formatOrderLines(items);
@@ -2858,15 +2858,15 @@ async function updateReservationOnSheet(reservation) {
     const hasDrink = hasDrinkItems(items);
 
     const url = buildReservationApiUrl({
-      action: 'updateReservation',
+      action: 'saveReservation',
       reservationNo: reservation.reservationNo,
       userId: reservation.userId,
       date: reservation.date,
       time: reservation.time,
       name: reservation.name,
       phone: reservation.phone,
-      status: reservation.status || '変更済み',
-      updatedAt: reservation.updatedAt || '',
+      status: reservation.status || '受付済み',
+      createdAt: reservation.createdAt || '',
       itemCount: String(reservation.itemCount || 0),
       totalQty: String(reservation.totalQty || 0),
       total: String(reservation.total || 0),
@@ -2878,7 +2878,7 @@ async function updateReservationOnSheet(reservation) {
       hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
       largeRiceQty: String(largeRiceQty),
       notifyMail: 'yes',
-      notifyType: 'change'
+      notifyType: 'new'
     });
 
     const response = await fetch(url);
@@ -2889,7 +2889,7 @@ async function updateReservationOnSheet(reservation) {
     const json = JSON.parse(text);
     return json.ok
       ? { ok: true }
-      : { ok: false, error: json.error || 'update error' };
+      : { ok: false, error: json.error || 'save error' };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
