@@ -2846,33 +2846,37 @@ function withMenuDefaults(menu) {
   };
 }
 
-async function saveReservationToSheet(reservation) {
+async function updateReservationOnSheet(reservation) {
   try {
-    const orderLines = formatOrderLines(reservation.items);
-    const foodLines = formatFoodLines(reservation.items);
-    const drinkLines = formatDrinkLines(reservation.items);
-    const largeRiceQty = getLargeRiceQty(reservation.items);
-    const hasDrink = hasDrinkItems(reservation.items);
+    const items = Array.isArray(reservation.items) ? reservation.items : [];
+    const orderLines = formatOrderLines(items);
+    const foodLines = formatFoodLines(items);
+    const drinkLines = formatDrinkLines(items);
+    const largeRiceQty = getLargeRiceQty(items);
+    const hasDrink = hasDrinkItems(items);
 
     const url = buildReservationApiUrl({
+      action: 'updateReservation',
       reservationNo: reservation.reservationNo,
+      userId: reservation.userId,
       date: reservation.date,
       time: reservation.time,
       name: reservation.name,
       phone: reservation.phone,
-      userId: reservation.userId,
-      status: reservation.status,
-      createdAt: reservation.createdAt,
-      itemCount: String(reservation.itemCount),
-      totalQty: String(reservation.totalQty),
-      total: String(reservation.total),
-      itemsJson: JSON.stringify(reservation.items),
+      status: reservation.status || '変更済み',
+      updatedAt: reservation.updatedAt || '',
+      itemCount: String(reservation.itemCount || 0),
+      totalQty: String(reservation.totalQty || 0),
+      total: String(reservation.total || 0),
+      itemsJson: JSON.stringify(items),
       orderLines,
       foodLines,
       drinkLines,
       hasDrink: hasDrink ? 'yes' : 'no',
       hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
-      largeRiceQty: String(largeRiceQty)
+      largeRiceQty: String(largeRiceQty),
+      notifyMail: 'yes',
+      notifyType: 'change'
     });
 
     const response = await fetch(url);
@@ -2881,7 +2885,9 @@ async function saveReservationToSheet(reservation) {
     if (!response.ok) return { ok: false, error: text };
 
     const json = JSON.parse(text);
-    return json.ok ? { ok: true } : { ok: false, error: json.error || 'save error' };
+    return json.ok
+      ? { ok: true }
+      : { ok: false, error: json.error || 'update error' };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
