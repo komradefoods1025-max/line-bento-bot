@@ -53,11 +53,11 @@ const DRINK_OPTIONS = [
   },
   {
     key: 'oolong',
-    name: '烏龍茶',
+    name: ‘やかんの麦茶’,
     price: 200,
     description: '食事と相性のいい定番ドリンク',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e7838fe9be8de88cb6.webp'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/518rlhbonql.jpg'
   },
   {
     key: 'cola',
