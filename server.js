@@ -985,6 +985,45 @@ function buildReservationCompleteMessage(reservation) {
       `ご来店をお待ちしています😊`
   );
 }
+async function notifyStoreByLine(reservation) {
+  if (!STORE_NOTIFY_LINE_ID) return;
+
+  const title =
+    reservation.status === 'キャンセル'
+      ? '【店舗通知：予約キャンセル】'
+      : reservation.status === '変更済み'
+        ? '【店舗通知：予約変更】'
+        : '【店舗通知：新規ランチ予約】';
+
+  const response = await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
+    },
+    body: JSON.stringify({
+      to: STORE_NOTIFY_LINE_ID,
+      messages: [
+        textMessage(
+          `${title}\n\n` +
+            `受付番号：${reservation.reservationNo}\n` +
+            `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+            `受取時間：${reservation.time}\n` +
+            `ご注文内容：\n${formatOrderLines(reservation.items)}\n` +
+            `合計個数：${reservation.totalQty}個\n` +
+            `注文合計：¥${Number(reservation.total).toLocaleString('ja-JP')}\n` +
+            `お名前：${reservation.name}\n` +
+            `電話番号：${reservation.phone}`
+        )
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text);
+  }
+}
 async function startLineLoading(userId, loadingSeconds = 5) {
   const seconds = Math.max(5, Math.min(60, Number(loadingSeconds) || 5));
 
