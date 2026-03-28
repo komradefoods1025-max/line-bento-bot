@@ -21,6 +21,7 @@ const BOOKABLE_DATE_COUNT = 10;
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
 const SAME_DAY_LEAD_MINUTES = Number(process.env.SAME_DAY_LEAD_MINUTES || 30);
+const CHANGE_LIMIT_MINUTES = 30;
 
 const BACK_ACTION = 'go_back';
 const CANCEL_ACTION = 'cancel_reservation';
@@ -3087,13 +3088,28 @@ async function beginReservationChangeFlow(replyToken, userId) {
 
   if (!latestResult.ok) {
     await replyMessage(replyToken, [
-      textMessage(`予約内容の取得でエラーが起きました。\n${latestResult.error || 'unknown error'}`)
+      textMessage(
+        `予約内容の取得でエラーが起きました。\n${latestResult.error || 'unknown error'}`
+      )
     ]);
     return;
   }
 
   if (!latestResult.found) {
-    await replyMessage(replyToken, [textMessage('変更できるご予約が見つかりませんでした。')]);
+    await replyMessage(replyToken, [
+      textMessage('変更できるご予約が見つかりませんでした。')
+    ]);
+    return;
+  }
+
+  const reservation = latestResult.reservation;
+
+  // 30分未満なら変更画面に入れない
+  if (isReservationChangeLocked(reservation)) {
+    await replyMessage(replyToken, [
+      buildReservationChangeLockedMessage(reservation),
+      buildLatestReservationMessage(reservation)
+    ]);
     return;
   }
 
@@ -3106,9 +3122,9 @@ async function beginReservationChangeFlow(replyToken, userId) {
       : [];
 
   const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
+
   clearSession(userId);
   const session = getSession(userId);
-  const reservation = latestResult.reservation;
 
   Object.assign(session, {
     flowType: 'change',
@@ -3118,16 +3134,22 @@ async function beginReservationChangeFlow(replyToken, userId) {
     time: reservation.time,
     name: reservation.name,
     phone: reservation.phone,
-    items: Array.isArray(reservation.items) ? reservation.items.map((item) => ({ ...item })) : [],
+    items: Array.isArray(reservation.items)
+      ? reservation.items.map((item) => ({ ...item }))
+      : [],
     currentSelection: null,
     dailyMenu: await fetchDailyMenuConfig(reservation.date),
-    availableDateOptions: bookingConfig.ok && Array.isArray(bookingConfig.dates) ? bookingConfig.dates : [],
+    availableDateOptions:
+      bookingConfig.ok && Array.isArray(bookingConfig.dates)
+        ? bookingConfig.dates
+        : [],
     availableDates,
     history: [],
     step: 'change_menu'
   });
 
   await savePendingSession(userId, session);
+
   await replyMessage(replyToken, [
     buildLatestReservationMessage(reservation),
     buildChangeCurrentSummaryMessage(session),
@@ -3136,20 +3158,67 @@ async function beginReservationChangeFlow(replyToken, userId) {
 }
 
 async function handleReservationChangeConfirm(replyToken, userId, session) {
-  if (!session.editingReservationNo) {
-    await replyMessage(replyToken, [textMessage('変更対象の予約が見つかりません。もう一度お試しください。')]);
+  if (!session?.editingReservationNo) {
+    await replyMessage(replyToken, [
+      textMessage('変更対象の予約が見つかりません。もう一度お試しください。')
+    ]);
     return;
   }
+
+  // 最終確定前に、最新の予約状態を再取得して再チェック
+  const latestResult = await fetchLatestReservation(userId);
+
+  if (!latestResult.ok) {
+    await replyMessage(replyToken, [
+      textMessage(
+        `予約内容の取得でエラーが起きました。\n${latestResult.error || 'unknown error'}`
+      )
+    ]);
+    return;
+  }
+
+  if (!latestResult.found) {
+    await replyMessage(replyToken, [
+      textMessage('変更対象の予約が見つかりませんでした。')
+    ]);
+    return;
+  }
+
+  const latestReservation = latestResult.reservation;
+
+  if (
+    latestReservation?.reservationNo &&
+    session.editingReservationNo &&
+    latestReservation.reservationNo !== session.editingReservationNo
+  ) {
+    await replyMessage(replyToken, [
+      textMessage('変更対象の予約が見つかりません。もう一度ご予約内容をご確認ください。')
+    ]);
+    return;
+  }
+
+  // 変更途中で30分を切った場合もここで止める
+  if (isReservationChangeLocked(latestReservation)) {
+    await replyMessage(replyToken, [
+      buildReservationChangeLockedMessage(latestReservation),
+      buildLatestReservationMessage(latestReservation)
+    ]);
+    return;
+  }
+
+  const items = Array.isArray(session.items)
+    ? session.items.map((item) => ({ ...item }))
+    : [];
 
   const reservation = {
     reservationNo: session.editingReservationNo,
     userId,
     date: session.date,
     time: session.time,
-    items: Array.isArray(session.items) ? session.items.map((item) => ({ ...item })) : [],
-    itemCount: Array.isArray(session.items) ? session.items.length : 0,
-    totalQty: getCartTotalQty(session.items),
-    total: getCartTotalAmount(session.items),
+    items,
+    itemCount: items.length,
+    totalQty: getCartTotalQty(items),
+    total: getCartTotalAmount(items),
     name: session.name,
     phone: session.phone,
     status: '変更済み',
@@ -3160,7 +3229,9 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
 
   if (!saveResult.ok) {
     await replyMessage(replyToken, [
-      textMessage(`予約変更の保存でエラーが起きました。\n${saveResult.error || 'unknown error'}`)
+      textMessage(
+        `予約変更の保存でエラーが起きました。\n${saveResult.error || 'unknown error'}`
+      )
     ]);
     return;
   }
@@ -3549,7 +3620,38 @@ function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
     return pickupDateTime.getTime() >= threshold.getTime();
   });
 }
+function getMinutesUntilPickup(reservation, now = new Date()) {
+  const date = normalizeYmdDate(reservation?.date || '');
+  const time = String(reservation?.time || '').trim();
 
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if (!/^\d{2}:\d{2}$/.test(time)) return null;
+
+  const pickupAt = jstDateTimeToUtcDate(date, time);
+  return Math.floor((pickupAt.getTime() - now.getTime()) / 60000);
+}
+
+function isReservationChangeLocked(reservation, now = new Date()) {
+  const minutes = getMinutesUntilPickup(reservation, now);
+  if (minutes == null) return false;
+
+  // 「30分を切ったら変更不可」
+  return minutes < CHANGE_LIMIT_MINUTES;
+}
+
+function buildReservationChangeLockedMessage(reservation) {
+  const dateLabel = reservation?.date
+    ? formatDateWithWeekday(reservation.date)
+    : '-';
+  const timeLabel = reservation?.time || '-';
+
+  return textMessage(
+    `お受け取りまでのお時間が30分を切っておりますので変更が出来ません💦\n\n` +
+      `現在のご予約\n` +
+      `受取日：${dateLabel}\n` +
+      `受取時間：${timeLabel}`
+  );
+}
 function jstDateTimeToUtcDate(dateStr, timeStr) {
   const [year, month, day] = normalizeYmdDate(dateStr).split('-').map(Number);
   const [hour, minute] = String(timeStr || '00:00').split(':').map(Number);
