@@ -2847,7 +2847,64 @@ function withMenuDefaults(menu) {
         : DEFAULT_DAILY_MENU.allowLargeRice
   };
 }
+async function fetchLatestReservation(userId) {
+  try {
+    const url = buildReservationApiUrl({
+      action: 'getLatestReservation',
+      userId
+    });
 
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) {
+      return { ok: false, found: false, error: text };
+    }
+
+    const json = JSON.parse(text);
+
+    if (!json.ok || !json.found) {
+      return { ok: true, found: false };
+    }
+
+    const reservation = {
+      reservationNo: json.reservationNo || json.reservation_id || '',
+      userId: json.userId || userId || '',
+      date: normalizeYmdDate(json.date || json.pickupDate || ''),
+      time: String(json.time || json.pickupTime || '').slice(0, 5),
+      items: Array.isArray(json.items)
+        ? json.items
+        : safeParseJsonArray(json.itemsJson),
+      itemCount: Number(json.itemCount || 0),
+      totalQty: Number(json.totalQty || 0),
+      total: Number(json.total || 0),
+      name: json.name || '',
+      phone: json.phone || '',
+      status: json.status || '受付済み'
+    };
+
+    return {
+      ok: true,
+      found: true,
+      reservation
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      found: false,
+      error: String(err)
+    };
+  }
+}
+
+function safeParseJsonArray(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 async function saveReservationToSheet(reservation) {
   try {
     const items = Array.isArray(reservation.items) ? reservation.items : [];
