@@ -2879,7 +2879,7 @@ async function cancelReservationOnSheet(reservation) {
       time: reservation.time,
       name: reservation.name,
       phone: reservation.phone,
-      status: reservation.status || 'キャンセル済み',
+      status: 'キャンセル',
       canceledAt: reservation.canceledAt || '',
       updatedAt: reservation.updatedAt || '',
       itemsJson: JSON.stringify(items),
@@ -2902,7 +2902,9 @@ async function cancelReservationOnSheet(reservation) {
     if (!response.ok) return { ok: false, error: text };
 
     const json = JSON.parse(text);
-    return json.ok ? { ok: true } : { ok: false, error: json.error || 'cancel error' };
+    return json.ok
+      ? { ok: true }
+      : { ok: false, error: json.error || 'cancel error' };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
@@ -2917,7 +2919,7 @@ function buildReservationCanceledMessage(reservation) {
       `ご注文内容：\n${formatOrderLines(reservation.items || [])}\n` +
       `お名前：${reservation.name || '-'}様\n` +
       `電話番号：${formatPhoneForDisplay(reservation.phone || '')}\n` +
-      `ステータス：${reservation.status || 'キャンセル済み'}`
+      `ステータス：${reservation.status || 'キャンセル'}`
   );
 }
 
@@ -2929,7 +2931,9 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
     return;
   }
 
-  const items = Array.isArray(session.items) ? session.items.map((item) => ({ ...item })) : [];
+  const items = Array.isArray(session.items)
+    ? session.items.map((item) => ({ ...item }))
+    : [];
   const canceledAt = getJstDateTimeLabel();
 
   const reservation = {
@@ -2943,7 +2947,7 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
     total: getCartTotalAmount(items),
     name: session.name,
     phone: session.phone,
-    status: 'キャンセル済み',
+    status: 'キャンセル',
     canceledAt,
     updatedAt: canceledAt
   };
@@ -2952,7 +2956,9 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
 
   if (!saveResult.ok) {
     await replyMessage(replyToken, [
-      textMessage(`予約キャンセルの保存でエラーが起きました。\n${saveResult.error || 'unknown error'}`)
+      textMessage(
+        `予約キャンセルの保存でエラーが起きました。\n${saveResult.error || 'unknown error'}`
+      )
     ]);
     return;
   }
@@ -3309,37 +3315,14 @@ async function runPendingReminderJob() {
 }
 
 async function notifyStoreByLine(reservation) {
-async function startLineLoading(userId, loadingSeconds = 5) {
-  const seconds = Math.max(5, Math.min(60, Number(loadingSeconds) || 5));
-
-  if (!userId || !CHANNEL_ACCESS_TOKEN) return;
-
-  try {
-    const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
-      },
-      body: JSON.stringify({
-        chatId: userId,
-        loadingSeconds: seconds
-      })
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('startLineLoading error:', response.status, text);
-    }
-  } catch (err) {
-    console.error('startLineLoading error:', err);
-  }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
   if (!STORE_NOTIFY_LINE_ID) return;
+
+  const title =
+    reservation.status === 'キャンセル'
+      ? '【店舗通知：予約キャンセル】'
+      : reservation.status === '変更済み'
+        ? '【店舗通知：予約変更】'
+        : '【店舗通知：新規ランチ予約】';
 
   const response = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
@@ -3351,7 +3334,7 @@ function sleep(ms) {
       to: STORE_NOTIFY_LINE_ID,
       messages: [
         textMessage(
-          `${reservation.status === '変更済み' ? '【店舗通知：予約変更】' : '【店舗通知：新規ランチ予約】'}\n\n` +
+          `${title}\n\n` +
             `受付番号：${reservation.reservationNo}\n` +
             `受取日：${formatDateWithWeekday(reservation.date)}\n` +
             `受取時間：${reservation.time}\n` +
@@ -3370,7 +3353,6 @@ function sleep(ms) {
     throw new Error(text);
   }
 }
-
 async function replyMessage(replyToken, messages) {
   const response = await fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'POST',
