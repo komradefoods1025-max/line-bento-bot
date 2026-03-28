@@ -65,15 +65,15 @@ const DRINK_OPTIONS = [
     description: 'シュワッと爽快な人気ドリンク',
     imageUrl:
       'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e382b3e383bce383a9-1.jpg'
-  }
-　key: 'oolong',
-    name: ‘コカコーラ・ゼロ’,
-    price: 200,
-    description: ‘ゼロシュガーゼロカロリー’,
-    imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/mono62457659-240314-02.jpg'
   },
   {
+    key: 'cola_zero',
+    name: 'コカコーラ・ゼロ',
+    price: 200,
+    description: 'ゼロシュガーゼロカロリー',
+    imageUrl:
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/mono62457659-240314-02.jpg'
+  }
 ];
 
 const DEFAULT_DAILY_MENU = {
