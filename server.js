@@ -2895,36 +2895,61 @@ async function saveReservationToSheet(reservation) {
   }
 }
 
-async function fetchLatestReservation(userId) {
+async function updateReservationOnSheet(reservation) {
   try {
+    const items = Array.isArray(reservation.items) ? reservation.items : [];
+    const orderLines = formatOrderLines(items);
+    const foodLines = formatFoodLines(items);
+    const drinkLines = formatDrinkLines(items);
+    const largeRiceQty = getLargeRiceQty(items);
+    const hasDrink = hasDrinkItems(items);
+
     const url = buildReservationApiUrl({
-      action: 'getLatestReservation',
-      userId
+      action: 'updateReservation',
+      reservationNo: reservation.reservationNo,
+      userId: reservation.userId,
+      date: reservation.date,
+      time: reservation.time,
+      name: reservation.name,
+      phone: reservation.phone,
+      status: reservation.status || '変更済み',
+      updatedAt: reservation.updatedAt || '',
+      itemCount: String(reservation.itemCount || 0),
+      totalQty: String(reservation.totalQty || 0),
+      total: String(reservation.total || 0),
+      itemsJson: JSON.stringify(items),
+      orderLines,
+      foodLines,
+      drinkLines,
+      hasDrink: hasDrink ? 'yes' : 'no',
+      hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
+      largeRiceQty: String(largeRiceQty),
+      notifyMail: 'yes',
+      notifyType: 'change'
     });
 
     const response = await fetch(url);
     const text = await response.text();
 
-    if (!response.ok) return { ok: false, found: false, error: text };
+    if (!response.ok) return { ok: false, error: text };
 
     const json = JSON.parse(text);
-    if (!json.ok || !json.found) {
-      return { ok: true, found: false };
-    }
-
-    return {
-      ok: true,
-      found: true,
-      reservation: reservationFromApiRow(json.reservation || json)
-    };
+    return json.ok
+      ? { ok: true }
+      : { ok: false, error: json.error || 'update error' };
   } catch (err) {
-    return { ok: false, found: false, error: String(err) };
+    return { ok: false, error: String(err) };
   }
 }
 
 async function cancelReservationOnSheet(reservation) {
   try {
     const items = Array.isArray(reservation.items) ? reservation.items : [];
+    const orderLines = formatOrderLines(items);
+    const foodLines = formatFoodLines(items);
+    const drinkLines = formatDrinkLines(items);
+    const largeRiceQty = getLargeRiceQty(items);
+    const hasDrink = hasDrinkItems(items);
 
     const url = buildReservationApiUrl({
       action: 'cancelReservation',
@@ -2937,16 +2962,16 @@ async function cancelReservationOnSheet(reservation) {
       status: 'キャンセル',
       canceledAt: reservation.canceledAt || '',
       updatedAt: reservation.updatedAt || '',
-      itemsJson: JSON.stringify(items),
       itemCount: String(reservation.itemCount || 0),
       totalQty: String(reservation.totalQty || 0),
       total: String(reservation.total || 0),
-      orderLines: formatOrderLines(items),
-      foodLines: formatFoodLines(items),
-      drinkLines: formatDrinkLines(items),
-      hasDrink: hasDrinkItems(items) ? 'yes' : 'no',
-      hasLargeRice: getLargeRiceQty(items) > 0 ? 'yes' : 'no',
-      largeRiceQty: String(getLargeRiceQty(items)),
+      itemsJson: JSON.stringify(items),
+      orderLines,
+      foodLines,
+      drinkLines,
+      hasDrink: hasDrink ? 'yes' : 'no',
+      hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
+      largeRiceQty: String(largeRiceQty),
       notifyMail: 'yes',
       notifyType: 'cancel'
     });
@@ -2965,17 +2990,91 @@ async function cancelReservationOnSheet(reservation) {
   }
 }
 
-function buildReservationCanceledMessage(reservation) {
-  return textMessage(
-    `ご予約のキャンセルを受け付けました。\n\n` +
-      `受付番号：${reservation.reservationNo}\n` +
-      `受取日：${reservation.date ? formatDateWithWeekday(reservation.date) : '-'}\n` +
-      `受取時間：${reservation.time || '-'}\n` +
-      `ご注文内容：\n${formatOrderLines(reservation.items || [])}\n` +
-      `お名前：${reservation.name || '-'}様\n` +
-      `電話番号：${formatPhoneForDisplay(reservation.phone || '')}\n` +
-      `ステータス：${reservation.status || 'キャンセル'}`
+async function handleReservationChangeConfirm(replyToken, userId, session) {
+  if (!session?.editingReservationNo) {
+    await replyMessage(replyToken, [
+      textMessage('変更対象の予約が見つかりません。もう一度お試しください。')
+    ]);
+    return;
+  }
+
+  const latestResult = await fetchLatestReservation(userId);
+
+  if (!latestResult.ok) {
+    await replyMessage(replyToken, [
+      textMessage(
+        `予約内容の取得でエラーが起きました。\n${latestResult.error || 'unknown error'}`
+      )
+    ]);
+    return;
+  }
+
+  if (!latestResult.found) {
+    await replyMessage(replyToken, [
+      textMessage('変更対象の予約が見つかりませんでした。')
+    ]);
+    return;
+  }
+
+  const latestReservation = latestResult.reservation;
+
+  if (
+    latestReservation?.reservationNo &&
+    session.editingReservationNo &&
+    latestReservation.reservationNo !== session.editingReservationNo
+  ) {
+    await replyMessage(replyToken, [
+      textMessage('変更対象の予約が見つかりません。もう一度ご予約内容をご確認ください。')
+    ]);
+    return;
+  }
+
+  if (isReservationChangeLocked(latestReservation)) {
+    await replyMessage(replyToken, [
+      buildReservationChangeLockedMessage(latestReservation),
+      buildLatestReservationMessage(latestReservation)
+    ]);
+    return;
+  }
+
+  const items = Array.isArray(session.items)
+    ? session.items.map((item) => ({ ...item }))
+    : [];
+
+  const reservation = {
+    reservationNo: session.editingReservationNo,
+    userId,
+    date: session.date,
+    time: session.time,
+    items,
+    itemCount: items.length,
+    totalQty: getCartTotalQty(items),
+    total: getCartTotalAmount(items),
+    name: session.name,
+    phone: session.phone,
+    status: '変更済み',
+    updatedAt: getJstDateTimeLabel()
+  };
+
+  const saveResult = await updateReservationOnSheet(reservation);
+
+  if (!saveResult.ok) {
+    await replyMessage(replyToken, [
+      textMessage(
+        `予約変更の保存でエラーが起きました。\n${saveResult.error || 'unknown error'}`
+      )
+    ]);
+    return;
+  }
+
+  notifyStoreByLine(reservation).catch((err) =>
+    console.error('store line notify error:', err)
   );
+
+  clearSession(userId);
+  await clearPendingSession(userId);
+
+  await replyMessage(replyToken, [buildReservationChangedMessage(reservation)]);
 }
 
 async function handleReservationCancelConfirm(replyToken, userId, session) {
