@@ -3018,12 +3018,9 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
     return;
   }
 
-  notifyStoreByLine({
-    reservation,
-    createdAt: canceledAt,
-    totalQty: reservation.totalQty,
-    total: reservation.total
-  }).catch((err) => console.error('store line notify error:', err));
+  notifyStoreByLine(reservation).catch((err) =>
+    console.error('store line notify error:', err)
+  );
 
   clearSession(userId);
   await clearPendingSession(userId);
@@ -3166,7 +3163,7 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
     return;
   }
 
-  // 最終確定前に、最新の予約状態を再取得して再チェック
+  // 最終確定前に最新の予約状態を再取得
   const latestResult = await fetchLatestReservation(userId);
 
   if (!latestResult.ok) {
@@ -3198,7 +3195,6 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
     return;
   }
 
-  // 変更途中で30分を切った場合もここで止める
   if (isReservationChangeLocked(latestReservation)) {
     await replyMessage(replyToken, [
       buildReservationChangeLockedMessage(latestReservation),
@@ -3237,12 +3233,9 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
     return;
   }
 
-  notifyStoreByLine({
-    reservation,
-    createdAt: reservation.updatedAt,
-    totalQty: reservation.totalQty,
-    total: reservation.total
-  }).catch((err) => console.error('store line notify error:', err));
+  notifyStoreByLine(reservation).catch((err) =>
+    console.error('store line notify error:', err)
+  );
 
   clearSession(userId);
   await clearPendingSession(userId);
