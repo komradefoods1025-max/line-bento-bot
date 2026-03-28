@@ -2766,21 +2766,94 @@ function getCartTotalQty(items) {
 }
 
 function reservationFromApiRow(row) {
-  const items = safeJsonParse(row.itemsJson || '[]', []);
+  const raw = row || {};
+
+  const items =
+    Array.isArray(raw.items)
+      ? raw.items
+      : safeJsonParse(
+          raw.itemsJson ||
+            raw.items_json ||
+            raw.orderItemsJson ||
+            raw.order_items_json ||
+            '[]',
+          []
+        );
+
+  const dateValue =
+    raw.date ||
+    raw.pickupDate ||
+    raw.pickup_date ||
+    raw.reservationDate ||
+    raw.reservation_date ||
+    '';
+
+  const timeValue =
+    raw.time ||
+    raw.pickupTime ||
+    raw.pickup_time ||
+    raw.reservationTime ||
+    raw.reservation_time ||
+    '';
+
   return {
-    reservationNo: row.reservationNo || '',
-    userId: row.userId || '',
-    date: normalizeYmdDate(row.date || ''),
-    time: row.time || '',
+    reservationNo:
+      raw.reservationNo ||
+      raw.reservation_no ||
+      raw.reservationId ||
+      raw.reservation_id ||
+      raw.id ||
+      '',
+    userId:
+      raw.userId ||
+      raw.user_id ||
+      '',
+    date: normalizeYmdDate(dateValue),
+    time: String(timeValue || '').slice(0, 5),
     items: Array.isArray(items) ? items : [],
-    itemCount: Number(row.itemCount || (Array.isArray(items) ? items.length : 0) || 0),
-    totalQty: Number(row.totalQty || getCartTotalQty(items) || 0),
-    total: Number(row.total || getCartTotalAmount(items) || 0),
-    name: row.name || '',
-    phone: row.phone || '',
-    status: row.status || '',
-    createdAt: row.createdAt || '',
-    orderLines: row.orderLines || formatOrderLines(items)
+    itemCount: Number(
+      raw.itemCount ||
+        raw.item_count ||
+        (Array.isArray(items) ? items.length : 0) ||
+        0
+    ),
+    totalQty: Number(
+      raw.totalQty ||
+        raw.total_qty ||
+        getCartTotalQty(items) ||
+        0
+    ),
+    total: Number(
+      raw.total ||
+        raw.amount ||
+        raw.totalAmount ||
+        raw.total_amount ||
+        getCartTotalAmount(items) ||
+        0
+    ),
+    name:
+      raw.name ||
+      raw.customerName ||
+      raw.customer_name ||
+      '',
+    phone:
+      raw.phone ||
+      raw.phoneNumber ||
+      raw.phone_number ||
+      '',
+    status:
+      raw.status ||
+      raw.reservationStatus ||
+      raw.reservation_status ||
+      '',
+    createdAt:
+      raw.createdAt ||
+      raw.created_at ||
+      '',
+    orderLines:
+      raw.orderLines ||
+      raw.order_lines ||
+      formatOrderLines(items)
   };
 }
 
