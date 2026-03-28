@@ -53,7 +53,7 @@ const DRINK_OPTIONS = [
   },
   {
     key: 'oolong',
-    name: ‘やかんの麦茶’,
+    name: 'やかんの麦茶',
     price: 200,
     description: '食事と相性のいい定番ドリンク',
     imageUrl:
