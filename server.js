@@ -1105,7 +1105,7 @@ function createReservationStartMessage() {
         `${STORE_NAME}のお弁当予約へようこそ🍱\n` +
         `受取日と受取時間を選んでください。\n\n` +
         `受取希望日を YYYY-MM-DD 形式で送ってください。\n` +
-        `例：2026-03-26`
+        `例：2026-04-02`
       ),
       { includeBack: true, includeCancel: true }
     );
@@ -1117,6 +1117,40 @@ function createReservationStartMessage() {
       text:
         `${STORE_NAME}のお弁当予約へようこそ🍱\n` +
         `受取日と受取時間を選んでください。`,
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: {
+              type: 'uri',
+              label: 'カレンダーを開く',
+              uri: `https://liff.line.me/${LIFF_ID}`
+            }
+          }
+        ]
+      }
+    },
+    { includeBack: true, includeCancel: true }
+  );
+}
+
+function createDateSelectMessage() {
+  if (!LIFF_ID) {
+    return withNavQuickReply(
+      textMessage(
+        '受取希望日を入力してください📅\n' +
+        '例：2026-04-02'
+      ),
+      { includeBack: true, includeCancel: true }
+    );
+  }
+
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text:
+        `${STORE_NAME}のお弁当予約です🍱\n` +
+        `${ORDER_START_DATE}以降の営業日のみ表示しています🗓️`,
       quickReply: {
         items: [
           {
@@ -3804,16 +3838,21 @@ function filterAvailableDatesByPickupTime(dates, now = new Date()) {
 function buildEffectiveAvailableDates(rawDates, now = new Date()) {
   const normalized = (rawDates || [])
     .map((date) => normalizeYmdDate(date))
-    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date));
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .filter((date) => date >= ORDER_START_DATE);
 
   const mergedDateSet = new Set(normalized);
   const todayJst = getNowJstDateLabel(now);
 
-  if (normalized.length > 0 && getAvailablePickupTimesForDate(todayJst, now).length > 0) {
+  if (
+    todayJst >= ORDER_START_DATE &&
+    normalized.length > 0 &&
+    getAvailablePickupTimesForDate(todayJst, now).length > 0
+  ) {
     mergedDateSet.add(todayJst);
   }
 
-  return filterAvailableDatesByPickupTime(Array.from(mergedDateSet), now);
+  return filterAvailableDatesByPickupTime(Array.from(mergedDateSet), now).sort();
 }
 
 function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
@@ -3821,6 +3860,10 @@ function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
     return PICKUP_TIMES;
+  }
+
+  if (normalizedDate < ORDER_START_DATE) {
+    return [];
   }
 
   const todayJst = getNowJstDateLabel(now);
