@@ -3276,7 +3276,9 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
   clearSession(userId);
   await clearPendingSession(userId);
 
-  await replyMessage(replyToken, [buildReservationCanceledMessage(reservation)]);
+  await replyMessage(replyToken, [
+  textMessage('正常にキャンセルが行われました！\nまたのご利用お待ちしております！')
+]);
 }
 function buildLatestReservationMessage(reservation) {
 const items = Array.isArray(reservation?.items) ? reservation.items : [];
