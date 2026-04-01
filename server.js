@@ -305,18 +305,20 @@ async function handleRichMenuEntry(event, replyToken, userId) {
   if (!intent || !userId) return false;
 
   if (intent === 'view') {
-    await startLineLoading(userId, 5);
-    await sleep(900);
-    await handleViewLatestReservation(replyToken, userId);
-    return true;
-  }
+  await startLineLoading(userId, 5);
+  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
+  await sleep(900);
+  await handleViewLatestReservation(replyToken, userId);
+  return true;
+}
 
   if (intent === 'change') {
-    await startLineLoading(userId, 5);
-    await sleep(900);
-    await beginReservationChangeFlow(replyToken, userId);
-    return true;
-  }
+  await startLineLoading(userId, 5);
+  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
+  await sleep(900);
+  await beginReservationChangeFlow(replyToken, userId);
+  return true;
+}
 
   return false;
 }
@@ -387,6 +389,7 @@ async function handleEvent(event) {
 
     if (isReservationViewText(text)) {
   await startLineLoading(userId, 5);
+  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
   await sleep(900);
   await handleViewLatestReservation(replyToken, userId);
   return;
@@ -394,6 +397,7 @@ async function handleEvent(event) {
 
 if (isReservationChangeText(text)) {
   await startLineLoading(userId, 5);
+  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
   await sleep(900);
   await beginReservationChangeFlow(replyToken, userId);
   return;
@@ -545,6 +549,7 @@ if (isReviewText(text)) {
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
   await startLineLoading(userId, 5);
+  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
   await sleep(1200);
   await beginReservationFlow(replyToken, userId);
   return;
@@ -938,6 +943,7 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
     if (data.action === 'confirm') {
       if (!isReservationComplete(session)) {
         await beginReservationFlow(replyToken, userId);
+await startLineLoading(userId, 5);
         return;
       }
 
@@ -1674,23 +1680,14 @@ function buildNameInputMessage() {
 
 function buildPhoneInputMessage() {
   return withNavQuickReply(
-    {
-      type: 'text',
-      text: 'ご連絡先の電話番号を入力してください📞\n例：09012345678',
-      quickReply: {
-        items: [
-          quickPostbackItem(
-            '電話番号を入力する',
-            'action=open_phone_input',
-            '電話番号を入力する',
-            {
-              inputOption: 'openKeyboard',
-              fillInText: ' '
-            }
-          )
-        ]
-      }
-    },
+    textMessage('例：09012345678'),
+    { includeBack: true, includeCancel: true }
+  );
+}
+
+function buildChangePhoneInputMessage() {
+  return withNavQuickReply(
+    textMessage('変更後の電話番号を入力してください。\n例：09012345678'),
     { includeBack: true, includeCancel: true }
   );
 }
@@ -2269,7 +2266,8 @@ function buildCartActionMessage() {
 
 function buildReservationChangedMessage(reservation) {
   return textMessage(
-    `予約変更を受け付けました✨\n\n` +
+    `※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️\n\n` +
+      `予約変更を受け付けました✨\n\n` +
       `受付番号：${reservation.reservationNo}\n` +
       `受取日：${formatDateWithWeekday(reservation.date)}\n` +
       `受取時間：${reservation.time}\n` +
@@ -2477,7 +2475,23 @@ function quickPostbackItem(label, data, displayText, options = {}) {
 function textMessage(text) {
   return { type: 'text', text };
 }
+function textMessage(text) {
+  return { type: 'text', text };
+}
 
+function buildBusyNoticeText(kind = 'processing') {
+  switch (kind) {
+    case 'check':
+      return textMessage(
+        '※ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
+      );
+    case 'processing':
+    default:
+      return textMessage(
+        '※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
+      );
+  }
+}
 function buildNavQuickReplyItems({ includeBack = true, includeCancel = true } = {}) {
   const items = [];
 
@@ -3277,7 +3291,9 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
   await clearPendingSession(userId);
 
   await replyMessage(replyToken, [
-  textMessage('正常にキャンセルが行われました！\nまたのご利用お待ちしております！')
+  textMessage(
+    '※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️\n\n正常にキャンセルが行われました！\nまたのご利用お待ちしております！'
+  )
 ]);
 }
 function buildLatestReservationMessage(reservation) {
