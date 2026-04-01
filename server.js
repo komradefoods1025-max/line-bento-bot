@@ -1075,12 +1075,12 @@ function buildBusyNoticeText(kind = 'processing') {
   switch (kind) {
     case 'check':
       return textMessage(
-        'ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
+        'ただいま確認をしております✨\n何も押さずにお待ちください🙇‍♂️'
       );
     case 'processing':
     default:
       return textMessage(
-        'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
+        'ただいま処理をしております✨\n何も押さずにお待ちください🙇‍♂️'
       );
   }
 }
@@ -1710,14 +1710,14 @@ function buildNameInputMessage() {
 
 function buildPhoneInputMessage() {
   return withNavQuickReply(
-    textMessage('例：09012345678'),
+    textMessage('ご連絡先を入力してください📞\n例：09012345678'),
     { includeBack: true, includeCancel: true }
   );
 }
 
 function buildChangePhoneInputMessage() {
   return withNavQuickReply(
-    textMessage('変更後の電話番号を入力してください。\n例：09012345678'),
+    textMessage('変更後のご連絡先を入力してください📞\n例：09012345678'),
     { includeBack: true, includeCancel: true }
   );
 }
@@ -2512,12 +2512,12 @@ function buildBusyNoticeText(kind = 'processing') {
   switch (kind) {
     case 'check':
       return textMessage(
-        'ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
+        '※ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
       );
     case 'processing':
     default:
       return textMessage(
-        'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
+        '※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
       );
   }
 }
