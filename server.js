@@ -1042,26 +1042,11 @@ async function startLineLoading(userId, loadingSeconds = 5) {
   if (!userId || !CHANNEL_ACCESS_TOKEN) return;
 
   try {
-    const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
-      },
+    ...
       body: JSON.stringify({
         chatId: userId,
         loadingSeconds: seconds
       })
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('startLineLoading error:', response.status, text);
-    }
-  } catch (err) {
-    console.error('startLineLoading error:', err);
-  }
-}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
