@@ -306,7 +306,6 @@ async function handleRichMenuEntry(event, replyToken, userId) {
 
   if (intent === 'view') {
   await startLineLoading(userId, 5);
-  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
   await sleep(900);
   await handleViewLatestReservation(replyToken, userId);
   return true;
@@ -314,7 +313,6 @@ async function handleRichMenuEntry(event, replyToken, userId) {
 
   if (intent === 'change') {
   await startLineLoading(userId, 5);
-  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
   await sleep(900);
   await beginReservationChangeFlow(replyToken, userId);
   return true;
@@ -389,7 +387,6 @@ async function handleEvent(event) {
 
     if (isReservationViewText(text)) {
   await startLineLoading(userId, 5);
-  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
   await sleep(900);
   await handleViewLatestReservation(replyToken, userId);
   return;
@@ -397,7 +394,6 @@ async function handleEvent(event) {
 
 if (isReservationChangeText(text)) {
   await startLineLoading(userId, 5);
-  await replyMessage(replyToken, [buildBusyNoticeText('check')]);
   await sleep(900);
   await beginReservationChangeFlow(replyToken, userId);
   return;
@@ -2512,12 +2508,12 @@ function buildBusyNoticeText(kind = 'processing') {
   switch (kind) {
     case 'check':
       return textMessage(
-        '※ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
+        'ただいま確認をしております✨\n何も押さずにお待ちください🙇‍♂️'
       );
     case 'processing':
     default:
       return textMessage(
-        '※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
+        'ただいま処理をしております✨\n何も押さずにお待ちください🙇‍♂️'
       );
   }
 }
