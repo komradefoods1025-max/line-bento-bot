@@ -2505,7 +2505,6 @@ function textMessage(text) {
 function textMessage(text) {
   return { type: 'text', text };
 }
-
 function buildBusyNoticeText(kind = 'processing') {
   switch (kind) {
     case 'check':
@@ -2519,6 +2518,7 @@ function buildBusyNoticeText(kind = 'processing') {
       );
   }
 }
+
 function buildNavQuickReplyItems({ includeBack = true, includeCancel = true } = {}) {
   const items = [];
 
