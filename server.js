@@ -549,8 +549,9 @@ if (isReviewText(text)) {
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
   await startLineLoading(userId, 5);
+  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
   await sleep(1200);
-  await beginReservationFlow(replyToken, userId);
+  await pushBeginReservationFlow(userId);
   return;
 }
 
@@ -945,7 +946,19 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
 await startLineLoading(userId, 5);
         return;
       }
-
+function buildBusyNoticeText(kind = 'processing') {
+  switch (kind) {
+    case 'check':
+      return textMessage(
+        'ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
+      );
+    case 'processing':
+    default:
+      return textMessage(
+        'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
+      );
+  }
+}
       const reservation = {
         reservationNo: createReservationNo(),
         userId,
@@ -1069,7 +1082,7 @@ async function startLineLoading(userId, loadingSeconds = 5) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-async function beginReservationFlow(replyToken, userId) {
+async function prepareReservationFlow(userId) {
   clearSession(userId);
   await clearPendingSession(userId);
 
@@ -1086,10 +1099,12 @@ async function beginReservationFlow(replyToken, userId) {
   const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
 
   if (!bookingConfig.ok || !availableDates.length) {
-    await replyMessage(replyToken, [
-      textMessage('現在ご案内できる営業日がありません。時間をおいてお試しください。')
-    ]);
-    return;
+    return {
+      ok: false,
+      messages: [
+        textMessage('現在ご案内できる営業日がありません。時間をおいてお試しください。')
+      ]
+    };
   }
 
   session.availableDateOptions = Array.isArray(bookingConfig.dates)
@@ -1101,7 +1116,20 @@ async function beginReservationFlow(replyToken, userId) {
 
   await savePendingSession(userId, session);
 
-  await replyMessage(replyToken, [createDateSelectMessage()]);
+  return {
+    ok: true,
+    messages: [createDateSelectMessage()]
+  };
+}
+
+async function beginReservationFlow(replyToken, userId) {
+  const result = await prepareReservationFlow(userId);
+  await replyMessage(replyToken, result.messages);
+}
+
+async function pushBeginReservationFlow(userId) {
+  const result = await prepareReservationFlow(userId);
+  await pushMessage(userId, result.messages);
 }
 function createReservationStartMessage() {
   if (!LIFF_ID) {
