@@ -941,38 +941,26 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
     }
 
     if (data.action === 'confirm') {
-      if (!isReservationComplete(session)) {
-        await beginReservationFlow(replyToken, userId);
-await startLineLoading(userId, 5);
-        return;
-      }
-function buildBusyNoticeText(kind = 'processing') {
-  switch (kind) {
-    case 'check':
-      return textMessage(
-        'ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
-      );
-    case 'processing':
-    default:
-      return textMessage(
-        'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
-      );
-  }
+  if (!isReservationComplete(session)) {
+  await startLineLoading(userId, 5);
+  await beginReservationFlow(replyToken, userId);
+  return;
 }
-      const reservation = {
-        reservationNo: createReservationNo(),
-        userId,
-        date: session.date,
-        time: session.time,
-        items: session.items.map((item) => ({ ...item })),
-        itemCount: session.items.length,
-        totalQty: getCartTotalQty(session.items),
-        total: getCartTotalAmount(session.items),
-        name: session.name,
-        phone: session.phone,
-        status: '受付済み',
-        createdAt: getJstDateTimeLabel()
-      };
+
+  const reservation = {
+    reservationNo: createReservationNo(),
+    userId,
+    date: session.date,
+    time: session.time,
+    items: session.items.map((item) => ({ ...item })),
+    itemCount: session.items.length,
+    totalQty: getCartTotalQty(session.items),
+    total: getCartTotalAmount(session.items),
+    name: session.name,
+    phone: session.phone,
+    status: '受付済み',
+    createdAt: getJstDateTimeLabel()
+  };
 
       const saveResult = await saveReservationToSheet(reservation);
 
@@ -1082,6 +1070,21 @@ async function startLineLoading(userId, loadingSeconds = 5) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+function buildBusyNoticeText(kind = 'processing') {
+  switch (kind) {
+    case 'check':
+      return textMessage(
+        'ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
+      );
+    case 'processing':
+    default:
+      return textMessage(
+        'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
+      );
+  }
+}
+
 async function prepareReservationFlow(userId) {
   clearSession(userId);
   await clearPendingSession(userId);
