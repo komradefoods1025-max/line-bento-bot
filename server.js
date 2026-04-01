@@ -2266,7 +2266,7 @@ function buildCartActionMessage() {
 
 function buildReservationChangedMessage(reservation) {
   return textMessage(
-    `※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️\n\n` +
+    `ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️\n\n` +
       `予約変更を受け付けました✨\n\n` +
       `受付番号：${reservation.reservationNo}\n` +
       `受取日：${formatDateWithWeekday(reservation.date)}\n` +
@@ -2483,12 +2483,12 @@ function buildBusyNoticeText(kind = 'processing') {
   switch (kind) {
     case 'check':
       return textMessage(
-        '※ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
+        'ただいま確認をしておりますので何も押さずにお待ちください🙇‍♂️'
       );
     case 'processing':
     default:
       return textMessage(
-        '※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
+        'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️'
       );
   }
 }
@@ -3292,7 +3292,7 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
 
   await replyMessage(replyToken, [
   textMessage(
-    '※ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️\n\n正常にキャンセルが行われました！\nまたのご利用お待ちしております！'
+    'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️\n\n正常にキャンセルが行われました！\nまたのご利用お待ちしております！'
   )
 ]);
 }
