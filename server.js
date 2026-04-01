@@ -549,7 +549,6 @@ if (isReviewText(text)) {
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
   await startLineLoading(userId, 5);
-  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
   await sleep(1200);
   await beginReservationFlow(replyToken, userId);
   return;
