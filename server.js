@@ -544,9 +544,9 @@ if (isReviewText(text)) {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
-  await startLineLoading(userId, 5);
+  await startLineLoading(userId, 10);
   await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-  await sleep(1200);
+  await sleep(1500);
   await pushBeginReservationFlow(userId);
   return;
 }
@@ -1037,7 +1037,7 @@ async function notifyStoreByLine(reservation) {
   }
 }
 async function startLineLoading(userId, loadingSeconds = 5) {
-  const seconds = Math.max(5, Math.min(60, Number(loadingSeconds) || 5));
+  await startLineLoading(userId, 15);
 
   if (!userId || !CHANNEL_ACCESS_TOKEN) return;
 
