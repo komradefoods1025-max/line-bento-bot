@@ -1329,7 +1329,77 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
       flowType: session.flowType
     });
 
+    async function handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime) {
+  const normalizedSelectedDate = normalizeYmdDate(selectedDate);
+  const normalizedSelectedTime = String(selectedTime || '').trim();
+
+  console.log(`[LIFF DATETIME RECEIVED ${APP_VERSION}]`, {
+    selectedDate: normalizedSelectedDate,
+    selectedTime: normalizedSelectedTime
+  });
+
+  const bookingConfig = await fetchBookingConfig();
+
+  const rawAvailableDates =
+    bookingConfig.ok && Array.isArray(bookingConfig.dates)
+      ? bookingConfig.dates
+          .map((item) => normalizeYmdDate(item?.date))
+          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+      : [];
+
+  const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
+
+  session.availableDateOptions = Array.isArray(bookingConfig.dates)
+    ? bookingConfig.dates
+    : [];
+  session.availableDates = availableDates;
+
+  if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
+    console.log(`[LIFF DATETIME REJECTED DATE ${APP_VERSION}]`, normalizedSelectedDate);
+    await savePendingSession(userId, session);
     await replyMessage(replyToken, [
+      textMessage('その日は受付対象外です。営業日から選び直してください。'),
+      createDateSelectMessage()
+    ]);
+    return;
+  }
+
+  const availableTimes = getAvailablePickupTimesForDate(normalizedSelectedDate);
+
+  if (!availableTimes.includes(normalizedSelectedTime)) {
+    console.log(`[LIFF DATETIME REJECTED TIME ${APP_VERSION}]`, normalizedSelectedTime);
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage(
+        `受取時間が受付対象外です。\n本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降からご予約いただけます。\nもう一度カレンダーから選んでください。`
+      ),
+      createDateSelectMessage()
+    ]);
+    return;
+  }
+
+  const nextDailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
+
+  await startLineLoading(userId, 8);
+  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
+  await sleep(1000);
+
+  if (session.flowType === 'change') {
+    transitionSession(session, 'change_menu', {
+      date: normalizedSelectedDate,
+      time: normalizedSelectedTime,
+      dailyMenu: nextDailyMenu
+    });
+    await savePendingSession(userId, session);
+
+    console.log(`[LIFF DATETIME ACCEPTED ${APP_VERSION}]`, {
+      date: session.date,
+      time: session.time,
+      step: session.step,
+      flowType: session.flowType
+    });
+
+    await pushMessage(userId, [
       textMessage(
         `変更後の受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n変更後の受取時間：${normalizedSelectedTime}`
       ),
@@ -1349,10 +1419,11 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   console.log(`[LIFF DATETIME ACCEPTED ${APP_VERSION}]`, {
     date: session.date,
     time: session.time,
-    step: session.step
+    step: session.step,
+    flowType: session.flowType
   });
 
-  await replyMessage(replyToken, [
+  await pushMessage(userId, [
     textMessage(
       `受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n受取時間：${normalizedSelectedTime}`
     ),
