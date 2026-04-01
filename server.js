@@ -1037,16 +1037,31 @@ async function notifyStoreByLine(reservation) {
   }
 }
 async function startLineLoading(userId, loadingSeconds = 5) {
-  await startLineLoading(userId, 15);
+  const seconds = Math.max(5, Math.min(60, Number(loadingSeconds) || 5));
 
   if (!userId || !CHANNEL_ACCESS_TOKEN) return;
 
   try {
-    ...
+    const response = await fetch('https://api.line.me/v2/bot/chat/loading/start', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+      },
       body: JSON.stringify({
         chatId: userId,
         loadingSeconds: seconds
       })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('startLineLoading error:', response.status, text);
+    }
+  } catch (err) {
+    console.error('startLineLoading error:', err);
+  }
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1185,37 +1200,6 @@ function createDateSelectMessage() {
   );
 }
 
-function createDateSelectMessage() {
-  if (!LIFF_ID) {
-    return withNavQuickReply(
-      textMessage(
-        '受取希望日を入力してください📅\n' +
-        '例：2026-03-26'
-      ),
-      { includeBack: true, includeCancel: true }
-    );
-  }
-
-  return withNavQuickReply(
-    {
-      type: 'text',
-      text: '受取希望日をカレンダーから選んでください📅',
-      quickReply: {
-        items: [
-          {
-            type: 'action',
-            action: {
-              type: 'uri',
-              label: 'カレンダーを開く',
-              uri: `https://liff.line.me/${LIFF_ID}`
-            }
-          }
-        ]
-      }
-    },
-    { includeBack: true, includeCancel: true }
-  );
-}
 
 function isYmdDate(text) {
   return /^\d{4}-\d{2}-\d{2}$/.test(normalizeYmdDate(text));
