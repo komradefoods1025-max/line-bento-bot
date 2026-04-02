@@ -1312,22 +1312,6 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
 
   const nextDailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
 
-  if (session.flowType === 'change') {
-    transitionSession(session, 'change_menu', {
-      date: normalizedSelectedDate,
-      time: normalizedSelectedTime,
-      dailyMenu: nextDailyMenu
-    });
-    await savePendingSession(userId, session);
-
-    console.log(`[LIFF DATETIME ACCEPTED ${APP_VERSION}]`, {
-      date: session.date,
-      time: session.time,
-      step: session.step,
-      flowType: session.flowType
-    });
-
-
   await startLineLoading(userId, 8);
   await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
   await sleep(1000);
