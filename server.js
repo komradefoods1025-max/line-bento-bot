@@ -783,49 +783,7 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
   return;
 }
 
-  if (canOfferDrinkForSelection(session.currentSelection)) {
-    transitionSession(session, 'waiting_drink_confirm');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      textMessage(`ご注文商品：${menu.name}`),
-      buildDrinkConfirmMessage(menu.name)
-    ]);
-    return;
-  }
-
-  transitionSession(session, 'waiting_qty');
-  await savePendingSession(userId, session);
-
-  await replyMessage(replyToken, [
-    textMessage(`ご注文商品：${menu.name}`),
-    buildQtyMessage(menu.name, 'food')
-  ]);
-  return;
-}
-
-      if (canOfferDrinkForSelection(session.currentSelection)) {
-        transitionSession(session, 'waiting_drink_confirm');
-        await savePendingSession(userId, session);
-
-        await replyMessage(replyToken, [
-          textMessage(`ご注文商品：${menu.name}`),
-          buildDrinkConfirmMessage(menu.name)
-        ]);
-        return;
-      }
-
-      transitionSession(session, 'waiting_qty');
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        textMessage(`ご注文商品：${menu.name}`),
-        buildQtyMessage(menu.name, 'food')
-      ]);
-      return;
-    }
-
-    if (data.action === 'drink') {
+if (data.action === 'drink') {
       const drink = resolveDrinkByKey(data.item || '');
 
       if (!drink) {
