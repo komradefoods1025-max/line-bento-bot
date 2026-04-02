@@ -3493,7 +3493,6 @@ async function beginReservationChangeFlow(replyToken, userId) {
   ]);
 }
 
-async function handleReservationChangeConfirm(replyToken, userId, session) {
   if (!session?.editingReservationNo) {
     await replyMessage(replyToken, [
       textMessage('変更対象の予約が見つかりません。もう一度お試しください。')
