@@ -1290,23 +1290,12 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     selectedTime: normalizedSelectedTime
   });
 
-  const bookingConfig = await fetchBookingConfig();
-
-  const rawAvailableDates =
-    bookingConfig.ok && Array.isArray(bookingConfig.dates)
-      ? bookingConfig.dates
-          .map((item) => normalizeYmdDate(item?.date))
-          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+  const availableDates =
+    Array.isArray(session?.availableDates) && session.availableDates.length
+      ? session.availableDates.map((date) => normalizeYmdDate(date))
       : [];
 
-  const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
-
-  session.availableDateOptions = Array.isArray(bookingConfig.dates)
-    ? bookingConfig.dates
-    : [];
-  session.availableDates = availableDates;
-
-  if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
+  if (availableDates.length && !availableDates.includes(normalizedSelectedDate)) {
     console.log(`[LIFF DATETIME REJECTED DATE ${APP_VERSION}]`, normalizedSelectedDate);
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
@@ -1332,10 +1321,6 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
 
   const nextDailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
 
-  await startLineLoading(userId, 8);
-  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-  await sleep(1000);
-
   if (session.flowType === 'change') {
     transitionSession(session, 'change_menu', {
       date: normalizedSelectedDate,
@@ -1351,7 +1336,7 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
       flowType: session.flowType
     });
 
-    await pushMessage(userId, [
+    await replyMessage(replyToken, [
       textMessage(
         `変更後の受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n変更後の受取時間：${normalizedSelectedTime}`
       ),
@@ -1375,14 +1360,13 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     flowType: session.flowType
   });
 
-  await pushMessage(userId, [
+  await replyMessage(replyToken, [
     textMessage(
       `受取日：${formatDateWithWeekday(normalizedSelectedDate)}\n受取時間：${normalizedSelectedTime}`
     ),
     ...buildMenuStepMessages(session)
   ]);
 }
-
 function buildTimeMessage(selectedDate = '') {
   const availableTimes = getAvailablePickupTimesForDate(selectedDate);
 
