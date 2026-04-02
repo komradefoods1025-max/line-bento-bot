@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-03-27-liiffix-17';
+const APP_VERSION = '2026-04-02-liiffix-18';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -1327,56 +1327,6 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
       flowType: session.flowType
     });
 
-    async function handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime) {
-  const normalizedSelectedDate = normalizeYmdDate(selectedDate);
-  const normalizedSelectedTime = String(selectedTime || '').trim();
-
-  console.log(`[LIFF DATETIME RECEIVED ${APP_VERSION}]`, {
-    selectedDate: normalizedSelectedDate,
-    selectedTime: normalizedSelectedTime
-  });
-
-  const bookingConfig = await fetchBookingConfig();
-
-  const rawAvailableDates =
-    bookingConfig.ok && Array.isArray(bookingConfig.dates)
-      ? bookingConfig.dates
-          .map((item) => normalizeYmdDate(item?.date))
-          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-      : [];
-
-  const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
-
-  session.availableDateOptions = Array.isArray(bookingConfig.dates)
-    ? bookingConfig.dates
-    : [];
-  session.availableDates = availableDates;
-
-  if (!normalizedSelectedDate || !availableDates.includes(normalizedSelectedDate)) {
-    console.log(`[LIFF DATETIME REJECTED DATE ${APP_VERSION}]`, normalizedSelectedDate);
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('その日は受付対象外です。営業日から選び直してください。'),
-      createDateSelectMessage()
-    ]);
-    return;
-  }
-
-  const availableTimes = getAvailablePickupTimesForDate(normalizedSelectedDate);
-
-  if (!availableTimes.includes(normalizedSelectedTime)) {
-    console.log(`[LIFF DATETIME REJECTED TIME ${APP_VERSION}]`, normalizedSelectedTime);
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage(
-        `受取時間が受付対象外です。\n本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降からご予約いただけます。\nもう一度カレンダーから選んでください。`
-      ),
-      createDateSelectMessage()
-    ]);
-    return;
-  }
-
-  const nextDailyMenu = await fetchDailyMenuConfig(normalizedSelectedDate);
 
   await startLineLoading(userId, 8);
   await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
@@ -3356,7 +3306,7 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
 
   await replyMessage(replyToken, [
   textMessage(
-    'ただいま処理をしておりますので何も押さずにお待ちください🙇‍♂️\n\n正常にキャンセルが行われました！\nまたのご利用お待ちしております！'
+    '正常にキャンセルが行われました！\nまたのご利用お待ちしております！'
   )
 ]);
 }
