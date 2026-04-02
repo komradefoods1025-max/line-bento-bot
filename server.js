@@ -730,6 +730,15 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
     return;
   }
 
+  if (menu.visible === false) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage(`申し訳ありません、${menu.name}は現在表示停止中です。`),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
+
   if (menu.soldOut) {
     await savePendingSession(userId, session);
     await replyMessage(replyToken, [
@@ -783,7 +792,7 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
   return;
 }
 
-if (data.action === 'drink') {
+    if (data.action === 'drink') {
       const drink = resolveDrinkByKey(data.item || '');
 
       if (!drink) {
@@ -1096,6 +1105,7 @@ async function prepareReservationFlow(userId) {
 
   const session = getSession(userId);
   const bookingConfig = await fetchBookingConfig();
+  const menuStatuses = await fetchMenuStatusesConfig();
 
   const rawAvailableDates =
     bookingConfig.ok && Array.isArray(bookingConfig.dates)
@@ -1119,6 +1129,7 @@ async function prepareReservationFlow(userId) {
     ? bookingConfig.dates
     : [];
   session.availableDates = availableDates;
+  session.menuStatuses = menuStatuses;
   session.history = [];
   session.step = 'waiting_date';
 
@@ -1410,12 +1421,19 @@ function getVisibleBentoBubbles(session) {
     bubbles.push(buildMenuBubble(DAILY_MENU_KEY, session.dailyMenu));
   }
 
-  bubbles.push(
-    buildMenuBubble('karaage', MENUS.karaage),
-    buildMenuBubble('shogayaki', MENUS.shogayaki),
-    buildMenuBubble('chicken_nanban', MENUS.chicken_nanban),
-    buildMenuBubble(EXTRA_KARAAGE_KEY, EXTRA_MENUS[EXTRA_KARAAGE_KEY])
-  );
+  const staticMenuKeys = [
+    'karaage',
+    'shogayaki',
+    'chicken_nanban',
+    EXTRA_KARAAGE_KEY
+  ];
+
+  staticMenuKeys.forEach((menuKey) => {
+    const menu = resolveMenuByKey(session, menuKey);
+    if (!menu) return;
+    if (menu.visible === false) return;
+    bubbles.push(buildMenuBubble(menuKey, menu));
+  });
 
   return bubbles;
 }
@@ -2579,16 +2597,37 @@ async function handleCancelAction(replyToken, userId) {
   ]);
 }
 
+function getMenuStatusMap(session) {
+  return session?.menuStatuses && typeof session.menuStatuses === 'object'
+    ? session.menuStatuses
+    : {};
+}
+
+function applyMenuStatus(baseMenu, statusRecord = {}) {
+  const menu = withMenuDefaults(baseMenu || {});
+
+  return {
+    ...menu,
+    soldOut:
+      statusRecord?.soldOut === true ||
+      String(statusRecord?.status || '').trim() === '売り切れ',
+    visible:
+      statusRecord?.visible === false
+        ? false
+        : true
+  };
+}
+
 function resolveMenuByKey(session, key) {
   if (key === DAILY_MENU_KEY) {
     return session?.dailyMenu?.name ? session.dailyMenu : null;
   }
 
-  if (EXTRA_MENUS[key]) {
-    return EXTRA_MENUS[key];
-  }
+  const baseMenu = EXTRA_MENUS[key] || MENUS[key];
+  if (!baseMenu) return null;
 
-  return MENUS[key] || null;
+  const statusMap = getMenuStatusMap(session);
+  return applyMenuStatus(baseMenu, statusMap[key] || {});
 }
 
 function resolveDrinkByKey(key) {
@@ -2628,6 +2667,7 @@ function createEmptySession() {
     items: [],
     currentSelection: null,
     dailyMenu: null,
+    menuStatuses: {},
     availableDates: [],
     availableDateOptions: [],
     history: [],
@@ -2651,6 +2691,7 @@ function createSessionSnapshot(session) {
     items: Array.isArray(session?.items) ? session.items : [],
     currentSelection: session?.currentSelection || null,
     dailyMenu: session?.dailyMenu || null,
+    menuStatuses: session?.menuStatuses || {},
     availableDates: Array.isArray(session?.availableDates) ? session.availableDates : [],
     availableDateOptions: Array.isArray(session?.availableDateOptions)
       ? session.availableDateOptions
@@ -2714,6 +2755,7 @@ function restoreSessionFromPending(pending) {
   const availableDates = safeJsonParse(pending.availableDatesJson, []);
   const availableDateOptions = safeJsonParse(pending.availableDateOptionsJson, []);
   const dailyMenuRaw = safeJsonParse(pending.dailyMenuJson, null);
+  const menuStatusesRaw = safeJsonParse(pending.menuStatusesJson, {});
   const historyRaw = safeJsonParse(pending.historyJson, []);
 
   return {
@@ -2724,6 +2766,7 @@ function restoreSessionFromPending(pending) {
     items: Array.isArray(items) ? items : [],
     currentSelection: currentSelection || null,
     dailyMenu: dailyMenuRaw?.name ? withMenuDefaults(dailyMenuRaw) : null,
+    menuStatuses: menuStatusesRaw && typeof menuStatusesRaw === 'object' ? menuStatusesRaw : {},
     availableDates: Array.isArray(availableDates)
       ? availableDates
           .map((date) => normalizeYmdDate(date))
@@ -2999,6 +3042,28 @@ async function fetchDailyMenuConfig(dateStr) {
   }
 }
 
+async function fetchMenuStatusesConfig() {
+  try {
+    const url = buildReservationApiUrl({
+      action: 'getMenuStatuses'
+    });
+
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) return {};
+
+    const json = JSON.parse(text);
+    if (!json.ok || typeof json.statuses !== 'object' || !json.statuses) {
+      return {};
+    }
+
+    return json.statuses;
+  } catch {
+    return {};
+  }
+}
+
 function withMenuDefaults(menu) {
   return {
     name: menu.name || DEFAULT_DAILY_MENU.name,
@@ -3009,7 +3074,8 @@ function withMenuDefaults(menu) {
       typeof menu.allowLargeRice === 'boolean'
         ? menu.allowLargeRice
         : DEFAULT_DAILY_MENU.allowLargeRice,
-    soldOut: menu.soldOut === true
+    soldOut: menu.soldOut === true,
+    visible: menu.visible === false ? false : true
   };
 }
 async function fetchLatestReservation(userId) {
@@ -3424,6 +3490,7 @@ async function beginReservationChangeFlow(replyToken, userId) {
   }
 
   const bookingConfig = await fetchBookingConfig();
+  const menuStatuses = await fetchMenuStatusesConfig();
   const rawAvailableDates =
     bookingConfig.ok && Array.isArray(bookingConfig.dates)
       ? bookingConfig.dates
@@ -3449,6 +3516,7 @@ async function beginReservationChangeFlow(replyToken, userId) {
       : [],
     currentSelection: null,
     dailyMenu: await fetchDailyMenuConfig(reservation.date),
+    menuStatuses: menuStatuses,
     availableDateOptions:
       bookingConfig.ok && Array.isArray(bookingConfig.dates)
         ? bookingConfig.dates
@@ -3494,7 +3562,8 @@ async function savePendingSession(userId, session) {
       flowType: session.flowType || 'new',
       editingReservationNo: session.editingReservationNo || '',
       editingStatus: session.editingStatus || '',
-      dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU)
+      dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU),
+      menuStatusesJson: JSON.stringify(session.menuStatuses || {})
     });
 
     const response = await fetch(url);
