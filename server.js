@@ -1180,9 +1180,7 @@ function createDateSelectMessage() {
   return withNavQuickReply(
     {
       type: 'text',
-      text:
-        `${STORE_NAME}のお弁当予約です🍱\n` +
-        `${ORDER_START_DATE}以降の営業日のみ表示しています🗓️`,
+      text: `${STORE_NAME}のお弁当予約です🍱`,
       quickReply: {
         items: [
           {
