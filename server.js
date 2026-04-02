@@ -719,39 +719,90 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
     }
 
     if (data.action === 'menu') {
-      const menu = resolveMenuByKey(session, data.item || '');
+  const menu = resolveMenuByKey(session, data.item || '');
 
-      if (!menu) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('メニューが見つかりませんでした。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+  if (!menu) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('メニューが見つかりませんでした。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      session.currentSelection = {
-        itemType: 'food',
-        menuKey: data.item,
-        menuName: menu.name,
-        price: Number(menu.price || 0),
-        riceSize: '',
-        allowLargeRice: !!menu.allowLargeRice,
-        drinkKey: '',
-        drinkName: '',
-        drinkPrice: 0
-      };
+  if (menu.soldOut) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage(`申し訳ありません、${menu.name}は売り切れです🙇‍♂️\n別の商品をお選びください。`),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      if (menu.allowLargeRice) {
-        transitionSession(session, 'waiting_rice_size');
-        await savePendingSession(userId, session);
+  session.currentSelection = {
+    itemType: 'food',
+    menuKey: data.item,
+    menuName: menu.name,
+    price: Number(menu.price || 0),
+    riceSize: '',
+    allowLargeRice: !!menu.allowLargeRice,
+    drinkKey: '',
+    drinkName: '',
+    drinkPrice: 0
+  };
 
-        await replyMessage(replyToken, [
-          textMessage(`ご注文商品：${menu.name}`),
-          buildLargeRiceMessage(menu.name)
-        ]);
-        return;
-      }
+  if (menu.allowLargeRice) {
+    transitionSession(session, 'waiting_rice_size');
+    await savePendingSession(userId, session);
+
+    await replyMessage(replyToken, [
+      textMessage(`ご注文商品：${menu.name}`),
+      buildLargeRiceMessage(menu.name)
+    ]);
+    return;
+  }
+
+  if (canOfferDrinkForSelection(session.currentSelection)) {
+    transitionSession(session, 'waiting_drink_confirm');
+    await savePendingSession(userId, session);
+
+    await replyMessage(replyToken, [
+      textMessage(`ご注文商品：${menu.name}`),
+      buildDrinkConfirmMessage(menu.name)
+    ]);
+    return;
+  }
+
+  transitionSession(session, 'waiting_qty');
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(`ご注文商品：${menu.name}`),
+    buildQtyMessage(menu.name, 'food')
+  ]);
+  return;
+}
+
+  if (canOfferDrinkForSelection(session.currentSelection)) {
+    transitionSession(session, 'waiting_drink_confirm');
+    await savePendingSession(userId, session);
+
+    await replyMessage(replyToken, [
+      textMessage(`ご注文商品：${menu.name}`),
+      buildDrinkConfirmMessage(menu.name)
+    ]);
+    return;
+  }
+
+  transitionSession(session, 'waiting_qty');
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(`ご注文商品：${menu.name}`),
+    buildQtyMessage(menu.name, 'food')
+  ]);
+  return;
+}
 
       if (canOfferDrinkForSelection(session.currentSelection)) {
         transitionSession(session, 'waiting_drink_confirm');
@@ -1460,9 +1511,19 @@ function buildDrinkFlexMessage() {
 }
 
 function buildMenuBubble(itemKey, menu) {
-  const buttonLabel = itemKey === EXTRA_KARAAGE_KEY ? '追加する' : 'この商品を選ぶ';
-  const displayText =
-    itemKey === EXTRA_KARAAGE_KEY ? `${menu.name}を追加する` : `${menu.name}を選ぶ`;
+  const isSoldOut = menu?.soldOut === true;
+
+  const buttonLabel = isSoldOut
+    ? '売り切れ'
+    : itemKey === EXTRA_KARAAGE_KEY
+      ? '追加する'
+      : 'この商品を選ぶ';
+
+  const displayText = isSoldOut
+    ? `${menu.name}は売り切れ`
+    : itemKey === EXTRA_KARAAGE_KEY
+      ? `${menu.name}を追加する`
+      : `${menu.name}を選ぶ`;
 
   const bodyContents = [
     {
@@ -1498,15 +1559,31 @@ function buildMenuBubble(itemKey, menu) {
     });
   }
 
+  if (isSoldOut) {
+    bodyContents.push({
+      type: 'text',
+      text: '本日売り切れ',
+      size: 'sm',
+      weight: 'bold',
+      color: '#DC2626',
+      wrap: true
+    });
+  }
+
   return {
     type: 'bubble',
-    size: 'mega',
     hero: {
       type: 'image',
       url: menu.imageUrl,
       size: 'full',
       aspectRatio: '20:13',
-      aspectMode: 'cover'
+      aspectMode: 'cover',
+      action: {
+        type: 'postback',
+        label: buttonLabel,
+        data: `action=menu&item=${encodeURIComponent(itemKey)}`,
+        displayText
+      }
     },
     body: {
       type: 'box',
@@ -1517,14 +1594,15 @@ function buildMenuBubble(itemKey, menu) {
     footer: {
       type: 'box',
       layout: 'vertical',
+      spacing: 'sm',
       contents: [
         {
           type: 'button',
-          style: 'primary',
+          style: isSoldOut ? 'secondary' : 'primary',
           action: {
             type: 'postback',
             label: buttonLabel,
-            data: `action=menu&item=${itemKey}`,
+            data: `action=menu&item=${encodeURIComponent(itemKey)}`,
             displayText
           }
         }
@@ -2953,7 +3031,10 @@ async function fetchDailyMenuConfig(dateStr) {
       price: Number(json.price || DEFAULT_DAILY_MENU.price),
       description: json.description || '',
       imageUrl: json.imageUrl || DEFAULT_DAILY_MENU.imageUrl,
-      allowLargeRice: true
+      allowLargeRice: true,
+      soldOut:
+        json.soldOut === true ||
+        String(json.soldOut || '').toLowerCase() === 'true'
     });
   } catch {
     return null;
@@ -2969,7 +3050,8 @@ function withMenuDefaults(menu) {
     allowLargeRice:
       typeof menu.allowLargeRice === 'boolean'
         ? menu.allowLargeRice
-        : DEFAULT_DAILY_MENU.allowLargeRice
+        : DEFAULT_DAILY_MENU.allowLargeRice,
+    soldOut: menu.soldOut === true
   };
 }
 async function fetchLatestReservation(userId) {
