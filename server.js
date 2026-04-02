@@ -71,7 +71,7 @@ const DRINK_OPTIONS = [
     description: 'シュワッと爽快な人気ドリンク',
     imageUrl:
       'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e382b3e383bce383a9-1.jpg',
-    soldOut: false,
+    soldOut: true,
     visible: true
   },
   {
