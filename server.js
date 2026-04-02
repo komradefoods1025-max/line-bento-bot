@@ -50,7 +50,9 @@ const DRINK_OPTIONS = [
     price: 150,
     description: 'すっきり飲みやすいミネラルウォーター',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e6b0b4-1.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e6b0b4-1.jpg',
+    soldOut: false,
+    visible: true
   },
   {
     key: 'oolong',
@@ -58,7 +60,9 @@ const DRINK_OPTIONS = [
     price: 200,
     description: '食事と相性のいい定番ドリンク',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/518rlhbonql.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/518rlhbonql.jpg',
+    soldOut: false,
+    visible: true
   },
   {
     key: 'cola',
@@ -66,7 +70,9 @@ const DRINK_OPTIONS = [
     price: 200,
     description: 'シュワッと爽快な人気ドリンク',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e382b3e383bce383a9-1.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e382b3e383bce383a9-1.jpg',
+    soldOut: false,
+    visible: true
   },
   {
     key: 'cola_zero',
@@ -74,7 +80,9 @@ const DRINK_OPTIONS = [
     price: 200,
     description: 'ゼロシュガーゼロカロリー',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/mono62457659-240314-02.jpg'
+      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/mono62457659-240314-02.jpg',
+    soldOut: false,
+    visible: true
   }
 ];
 
@@ -793,52 +801,61 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
 }
 
     if (data.action === 'drink') {
-      const drink = resolveDrinkByKey(data.item || '');
+  const drink = resolveDrinkByKey(data.item || '');
 
-      if (!drink) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('ドリンクが見つかりませんでした。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+  if (!drink || drink.visible === false) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('ドリンクが見つかりませんでした。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      if (session.step === 'waiting_drink_menu' && session.currentSelection) {
-        session.currentSelection.drinkKey = `${DRINK_KEY_PREFIX}${drink.key}`;
-        session.currentSelection.drinkName = drink.name;
-        session.currentSelection.drinkPrice = Number(drink.price || 0);
-        transitionSession(session, 'waiting_qty');
-        await savePendingSession(userId, session);
+  if (drink.soldOut) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage(`申し訳ありません、${drink.name}は売り切れです🙇‍♂️\n別のドリンクをお選びください。`),
+      buildDrinkFlexMessage()
+    ]);
+    return;
+  }
 
-        await replyMessage(replyToken, [
-          textMessage(`ドリンク：${drink.name} を付けます。`),
-          buildQtyMessage(getCurrentSelectionLabel(session.currentSelection), 'food')
-        ]);
-        return;
-      }
+  if (session.step === 'waiting_drink_menu' && session.currentSelection) {
+    session.currentSelection.drinkKey = `${DRINK_KEY_PREFIX}${drink.key}`;
+    session.currentSelection.drinkName = drink.name;
+    session.currentSelection.drinkPrice = Number(drink.price || 0);
+    transitionSession(session, 'waiting_qty');
+    await savePendingSession(userId, session);
 
-      session.currentSelection = {
-        itemType: 'drink',
-        menuKey: `${DRINK_KEY_PREFIX}${drink.key}`,
-        menuName: drink.name,
-        price: Number(drink.price || 0),
-        riceSize: '',
-        allowLargeRice: false,
-        drinkKey: '',
-        drinkName: '',
-        drinkPrice: 0
-      };
+    await replyMessage(replyToken, [
+      textMessage(`ドリンク：${drink.name} を付けます。`),
+      buildQtyMessage(getCurrentSelectionLabel(session.currentSelection), 'food')
+    ]);
+    return;
+  }
 
-      transitionSession(session, 'waiting_qty');
-      await savePendingSession(userId, session);
+  session.currentSelection = {
+    itemType: 'drink',
+    menuKey: `${DRINK_KEY_PREFIX}${drink.key}`,
+    menuName: drink.name,
+    price: Number(drink.price || 0),
+    riceSize: '',
+    allowLargeRice: false,
+    drinkKey: '',
+    drinkName: '',
+    drinkPrice: 0
+  };
 
-      await replyMessage(replyToken, [
-        textMessage(`ご注文商品：${drink.name}`),
-        buildQtyMessage(drink.name, 'drink')
-      ]);
-      return;
-    }
+  transitionSession(session, 'waiting_qty');
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(`ご注文商品：${drink.name}`),
+    buildQtyMessage(drink.name, 'drink')
+  ]);
+  return;
+}
 
     if (data.action === 'rice_size') {
       if (!session.currentSelection) {
@@ -1460,12 +1477,14 @@ function buildMenuFlexMessage(session) {
 }
 
 function buildDrinkFlexMessage() {
+  const visibleDrinks = DRINK_OPTIONS.filter((drink) => drink?.visible !== false);
+
   return {
     type: 'flex',
     altText: 'ドリンクメニュー',
     contents: {
       type: 'carousel',
-      contents: DRINK_OPTIONS.map((drink) => buildDrinkBubble(drink))
+      contents: visibleDrinks.map((drink) => buildDrinkBubble(drink))
     }
   };
 }
@@ -1572,6 +1591,48 @@ function buildMenuBubble(itemKey, menu) {
 }
 
 function buildDrinkBubble(drink) {
+  const isSoldOut = drink?.soldOut === true;
+
+  const buttonLabel = isSoldOut ? '売り切れ' : 'このドリンクを選ぶ';
+  const displayText = isSoldOut
+    ? `${drink.name}は売り切れ`
+    : `${drink.name}を選ぶ`;
+
+  const bodyContents = [
+    {
+      type: 'text',
+      text: drink.name,
+      weight: 'bold',
+      size: 'lg',
+      wrap: true
+    },
+    {
+      type: 'text',
+      text: `¥${Number(drink.price).toLocaleString('ja-JP')}`,
+      weight: 'bold',
+      size: 'md',
+      color: '#16A34A'
+    },
+    {
+      type: 'text',
+      text: drink.description || '',
+      size: 'sm',
+      color: '#666666',
+      wrap: true
+    }
+  ];
+
+  if (isSoldOut) {
+    bodyContents.push({
+      type: 'text',
+      text: '本日売り切れ',
+      size: 'sm',
+      weight: 'bold',
+      color: '#DC2626',
+      wrap: true
+    });
+  }
+
   return {
     type: 'bubble',
     size: 'kilo',
@@ -1586,42 +1647,21 @@ function buildDrinkBubble(drink) {
       type: 'box',
       layout: 'vertical',
       spacing: 'sm',
-      contents: [
-        {
-          type: 'text',
-          text: drink.name,
-          weight: 'bold',
-          size: 'lg',
-          wrap: true
-        },
-        {
-          type: 'text',
-          text: `¥${Number(drink.price).toLocaleString('ja-JP')}`,
-          weight: 'bold',
-          size: 'md',
-          color: '#16A34A'
-        },
-        {
-          type: 'text',
-          text: drink.description || '',
-          size: 'sm',
-          color: '#666666',
-          wrap: true
-        }
-      ]
+      contents: bodyContents
     },
     footer: {
       type: 'box',
       layout: 'vertical',
+      spacing: 'sm',
       contents: [
         {
           type: 'button',
-          style: 'primary',
+          style: isSoldOut ? 'secondary' : 'primary',
           action: {
             type: 'postback',
-            label: 'このドリンクを追加',
-            data: `action=drink&item=${drink.key}`,
-            displayText: `${drink.name}を追加する`
+            label: buttonLabel,
+            data: `action=drink&item=${encodeURIComponent(drink.key)}`,
+            displayText
           }
         }
       ]
@@ -2615,7 +2655,14 @@ function resolveMenuByKey(session, key) {
 }
 
 function resolveDrinkByKey(key) {
-  return DRINK_OPTIONS.find((drink) => drink.key === key) || null;
+  const drink = DRINK_OPTIONS.find((item) => item.key === key);
+  if (!drink) return null;
+
+  return {
+    ...drink,
+    soldOut: drink.soldOut === true,
+    visible: drink.visible !== false
+  };
 }
 
 async function loadSession(userId) {
