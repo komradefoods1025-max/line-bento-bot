@@ -9,8 +9,7 @@ const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
-const notifyTo = STORE_NOTIFY_GROUP_ID || STORE_NOTIFY_LINE_ID || '';
-if (!notifyTo) return;
+const STORE_NOTIFY_GROUP_ID = process.env.STORE_NOTIFY_GROUP_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
 
 const APP_VERSION = '2026-04-04-group-notify-01';
@@ -2643,6 +2642,35 @@ function isReservationChangeLocked(reservation, now = new Date()) {
 }
 
 function buildReservationChangeLockedMessage(reservation) {
+function buildLatestReservationMessage(reservation) {
+  const items = Array.isArray(reservation?.items) ? reservation.items : [];
+  const totalQty =
+    reservation?.totalQty != null && reservation.totalQty !== ''
+      ? Number(reservation.totalQty)
+      : getCartTotalQty(items);
+  const totalAmount =
+    reservation?.total != null && reservation.total !== ''
+      ? Number(reservation.total)
+      : getCartTotalAmount(items);
+
+  const orderText =
+    reservation?.orderLines && String(reservation.orderLines).trim()
+      ? String(reservation.orderLines)
+      : formatOrderLines(items);
+
+  return textMessage(
+    `現在のご予約内容です📋\n\n` +
+      `受付番号：${reservation?.reservationNo || '-'}\n` +
+      `受取日：${reservation?.date ? formatDateWithWeekday(reservation.date) : '-'}\n` +
+      `受取時間：${reservation?.time || '-'}\n` +
+      `ご注文内容：\n${orderText}\n` +
+      `合計個数：${totalQty}個\n` +
+      `注文合計：¥${Number(totalAmount).toLocaleString('ja-JP')}\n` +
+      `お名前：${reservation?.name || '-'}様\n` +
+      `電話番号：${formatPhoneForDisplay(reservation?.phone || '')}\n` +
+      `ステータス：${reservation?.status || '受付済み'}`
+  );
+}
   return textMessage(
     `こちらの予約は受取時刻の${CHANGE_LIMIT_MINUTES}分前を過ぎているため、LINEからは変更できません。\n` +
       `受取日：${formatDateWithWeekday(reservation.date)}\n` +
@@ -2654,27 +2682,29 @@ function buildReservationChangeLockedMessage(reservation) {
 async function handleViewLatestReservation(replyToken, userId) {
   const result = await fetchLatestReservation(userId);
 
-  if (!result.ok || !result.found) {
+  if (!result.ok) {
     await replyMessage(replyToken, [
-      textMessage('現在確認できる予約がありません。'),
-      startGuideMessage()
+      textMessage(`予約内容の取得でエラーが起きました。\n${result.error || 'unknown error'}`)
     ]);
     return;
   }
 
-  const reservation = result.reservation;
+  if (!result.found) {
+    await replyMessage(replyToken, [textMessage('現在確認できるご予約がありません。')]);
+    return;
+  }
+
   await replyMessage(replyToken, [
-    textMessage(
-      `現在の予約内容です。\n\n` +
-        `受付番号：${reservation.reservationNo || '-'}\n` +
-        `受取日：${formatDateWithWeekday(reservation.date)}\n` +
-        `受取時間：${reservation.time}\n` +
-        `ご注文内容：\n${formatOrderLines(reservation.items || [])}\n` +
-        `合計個数：${Number(reservation.totalQty || 0)}個\n` +
-        `注文合計：¥${Number(reservation.total || 0).toLocaleString('ja-JP')}\n` +
-        `お名前：${reservation.name || '-'}\n` +
-        `電話番号：${reservation.phone || '-'}\n` +
-        `ステータス：${reservation.status || '-'}'
+    buildLatestReservationMessage(result.reservation),
+    withNavQuickReply(
+      {
+        type: 'text',
+        text: '予約変更する場合は下のボタンから進めます。',
+        quickReply: {
+          items: [quickPostbackItem('予約変更', 'action=begin_change', '予約変更')]
+        }
+      },
+      { includeBack: false, includeCancel: false }
     )
   ]);
 }
