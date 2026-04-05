@@ -412,7 +412,17 @@ const sourceId =
       ]);
       return;
     }
+if (isStartReservationText(text) || isResetText(text)) {
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
 
+  await startLineLoading(userId, 5);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
     if (text.includes('予約日時|')) {
       console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
 
@@ -1309,15 +1319,25 @@ function parsePostbackData(data) {
   return result;
 }
 
-function quickPostbackItem(label, data, displayText = label) {
+function quickPostbackItem(label, data, displayText = label, options = {}) {
+  const action = {
+    type: 'postback',
+    label,
+    data,
+    displayText
+  };
+
+  if (options.inputOption) {
+    action.inputOption = options.inputOption;
+  }
+
+  if (typeof options.fillInText === 'string' && options.fillInText.length > 0) {
+    action.fillInText = options.fillInText;
+  }
+
   return {
     type: 'action',
-    action: {
-      type: 'postback',
-      label,
-      data,
-      displayText
-    }
+    action
   };
 }
 
@@ -1830,28 +1850,92 @@ function normalizeRiceSizeLabel(value) {
 
 function buildNameInputMessage() {
   return withNavQuickReply(
-    textMessage('お名前を入力してください。'),
+    {
+      type: 'text',
+      text: 'ご予約名を入力してください👤\n受け取りされる方のお名前でお願いします。',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '名前を入力する',
+            'action=open_name_input',
+            '名前を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
     { includeBack: true, includeCancel: true }
   );
 }
 
 function buildPhoneInputMessage() {
   return withNavQuickReply(
-    textMessage('電話番号を入力してください。\n例：09012345678'),
+    {
+      type: 'text',
+      text: 'ご連絡先を入力してください📞\n例：09012345678',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '電話番号を入力する',
+            'action=open_phone_input',
+            '電話番号を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
     { includeBack: true, includeCancel: true }
   );
 }
 
 function buildChangeNameInputMessage() {
   return withNavQuickReply(
-    textMessage('変更後のお名前を入力してください。'),
+    {
+      type: 'text',
+      text: '変更後のお名前をご入力してください👤',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '名前を入力する',
+            'action=open_name_input',
+            '名前を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
     { includeBack: true, includeCancel: true }
   );
 }
 
 function buildChangePhoneInputMessage() {
   return withNavQuickReply(
-    textMessage('変更後の電話番号を入力してください。\n例：09012345678'),
+    {
+      type: 'text',
+      text: '変更後の電話番号をご入力してください🤙\n例：09012345678',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            '電話番号を入力する',
+            'action=open_phone_input',
+            '電話番号を入力する',
+            {
+              inputOption: 'openKeyboard',
+              fillInText: ' '
+            }
+          )
+        ]
+      }
+    },
     { includeBack: true, includeCancel: true }
   );
 }
