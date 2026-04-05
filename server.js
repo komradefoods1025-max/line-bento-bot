@@ -3071,43 +3071,143 @@ async function fetchMenuStatusesConfig() {
 
 async function saveReservationToSheet(reservation) {
   try {
-    const response = await fetch(RESERVATION_SAVE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'saveReservation', reservation })
+    const items = Array.isArray(reservation.items) ? reservation.items : [];
+    const orderLines = formatOrderLines(items);
+    const foodLines = formatFoodLines(items);
+    const drinkLines = formatDrinkLines(items);
+    const largeRiceQty = getLargeRiceQty(items);
+    const hasDrink = hasDrinkItems(items);
+
+    const url = buildReservationApiUrl({
+      action: 'saveReservation',
+      reservationNo: reservation.reservationNo,
+      userId: reservation.userId,
+      date: reservation.date,
+      time: reservation.time,
+      name: reservation.name,
+      phone: reservation.phone,
+      status: reservation.status || '受付済み',
+      createdAt: reservation.createdAt || '',
+      itemCount: String(reservation.itemCount || 0),
+      totalQty: String(reservation.totalQty || 0),
+      total: String(reservation.total || 0),
+      itemsJson: JSON.stringify(items),
+      orderLines,
+      foodLines,
+      drinkLines,
+      hasDrink: hasDrink ? 'yes' : 'no',
+      hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
+      largeRiceQty: String(largeRiceQty),
+      notifyMail: 'yes',
+      notifyType: 'new'
     });
-    return await response.json();
+
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) return { ok: false, error: text };
+
+    const json = JSON.parse(text);
+    return json.ok
+      ? { ok: true }
+      : { ok: false, error: json.error || 'save error' };
   } catch (err) {
-    console.error('saveReservationToSheet error:', err);
-    return { ok: false, error: err.message || String(err) };
+    return { ok: false, error: String(err) };
   }
 }
 
 async function changeReservationInSheet(reservation) {
   try {
-    const response = await fetch(RESERVATION_SAVE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'changeReservation', reservation })
+    const items = Array.isArray(reservation.items) ? reservation.items : [];
+    const orderLines = formatOrderLines(items);
+    const foodLines = formatFoodLines(items);
+    const drinkLines = formatDrinkLines(items);
+    const largeRiceQty = getLargeRiceQty(items);
+    const hasDrink = hasDrinkItems(items);
+
+    const url = buildReservationApiUrl({
+      action: 'updateReservation',
+      reservationNo: reservation.reservationNo,
+      userId: reservation.userId,
+      date: reservation.date,
+      time: reservation.time,
+      name: reservation.name,
+      phone: reservation.phone,
+      status: reservation.status || '変更済み',
+      updatedAt: reservation.updatedAt || '',
+      itemCount: String(reservation.itemCount || 0),
+      totalQty: String(reservation.totalQty || 0),
+      total: String(reservation.total || 0),
+      itemsJson: JSON.stringify(items),
+      orderLines,
+      foodLines,
+      drinkLines,
+      hasDrink: hasDrink ? 'yes' : 'no',
+      hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
+      largeRiceQty: String(largeRiceQty),
+      notifyMail: 'yes',
+      notifyType: 'change'
     });
-    return await response.json();
+
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) return { ok: false, error: text };
+
+    const json = JSON.parse(text);
+    return json.ok
+      ? { ok: true }
+      : { ok: false, error: json.error || 'update error' };
   } catch (err) {
-    console.error('changeReservationInSheet error:', err);
-    return { ok: false, error: err.message || String(err) };
+    return { ok: false, error: String(err) };
   }
 }
 
 async function cancelReservationInSheet(reservation) {
   try {
-    const response = await fetch(RESERVATION_SAVE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'cancelReservation', reservation })
+    const items = Array.isArray(reservation.items) ? reservation.items : [];
+    const orderLines = formatOrderLines(items);
+    const foodLines = formatFoodLines(items);
+    const drinkLines = formatDrinkLines(items);
+    const largeRiceQty = getLargeRiceQty(items);
+    const hasDrink = hasDrinkItems(items);
+
+    const url = buildReservationApiUrl({
+      action: 'cancelReservation',
+      reservationNo: reservation.reservationNo,
+      userId: reservation.userId,
+      date: reservation.date,
+      time: reservation.time,
+      name: reservation.name,
+      phone: reservation.phone,
+      status: 'キャンセル',
+      canceledAt: reservation.canceledAt || '',
+      updatedAt: reservation.updatedAt || '',
+      itemCount: String(reservation.itemCount || 0),
+      totalQty: String(reservation.totalQty || 0),
+      total: String(reservation.total || 0),
+      itemsJson: JSON.stringify(items),
+      orderLines,
+      foodLines,
+      drinkLines,
+      hasDrink: hasDrink ? 'yes' : 'no',
+      hasLargeRice: largeRiceQty > 0 ? 'yes' : 'no',
+      largeRiceQty: String(largeRiceQty),
+      notifyMail: 'yes',
+      notifyType: 'cancel'
     });
-    return await response.json();
+
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) return { ok: false, error: text };
+
+    const json = JSON.parse(text);
+    return json.ok
+      ? { ok: true }
+      : { ok: false, error: json.error || 'cancel error' };
   } catch (err) {
-    console.error('cancelReservationInSheet error:', err);
-    return { ok: false, error: err.message || String(err) };
+    return { ok: false, error: String(err) };
   }
 }
 
