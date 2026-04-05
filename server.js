@@ -3044,35 +3044,7 @@ function buildLatestReservationMessage(reservation) {
   );
 }
 
-async function handleViewLatestReservation(replyToken, userId) {
-  const result = await fetchLatestReservation(userId);
 
-  if (!result.ok) {
-    await replyMessage(replyToken, [
-      textMessage(`予約内容の取得でエラーが起きました。\n${result.error || 'unknown error'}`)
-    ]);
-    return;
-  }
-
-  if (!result.found) {
-    await replyMessage(replyToken, [textMessage('現在確認できるご予約がありません。')]);
-    return;
-  }
-
-  await replyMessage(replyToken, [
-    buildLatestReservationMessage(result.reservation),
-    withNavQuickReply(
-      {
-        type: 'text',
-        text: '予約変更する場合は下のボタンから進めます。',
-        quickReply: {
-          items: [quickPostbackItem('予約変更', 'action=begin_change', '予約変更')]
-        }
-      },
-      { includeBack: false, includeCancel: false }
-    )
-  ]);
-}
 
 async function beginReservationChangeFlow(replyToken, userId) {
   const latest = await fetchLatestReservation(userId);
@@ -3084,7 +3056,33 @@ async function beginReservationChangeFlow(replyToken, userId) {
     ]);
     return;
   }
+async function handleViewLatestReservation(replyToken, userId) {
+  const result = await fetchLatestReservation(userId);
 
+  if (!result.ok || !result.found) {
+    await replyMessage(replyToken, [
+      textMessage('現在確認できる予約がありません。'),
+      startGuideMessage()
+    ]);
+    return;
+  }
+
+  const reservation = result.reservation;
+  await replyMessage(replyToken, [
+    textMessage(
+      `現在の予約内容です。\n\n` +
+        `受付番号：${reservation.reservationNo || '-'}\n` +
+        `受取日：${formatDateWithWeekday(reservation.date)}\n` +
+        `受取時間：${reservation.time}\n` +
+        `ご注文内容：\n${formatOrderLines(reservation.items || [])}\n` +
+        `合計個数：${Number(reservation.totalQty || 0)}個\n` +
+        `注文合計：¥${Number(reservation.total || 0).toLocaleString('ja-JP')}\n` +
+        `お名前：${reservation.name || '-'}\n` +
+        `電話番号：${reservation.phone || '-'}\n` +
+        `ステータス：${reservation.status || '-'}`
+    )
+  ]);
+}
   const reservation = latest.reservation;
 
   if (String(reservation.status || '') === 'キャンセル') {
