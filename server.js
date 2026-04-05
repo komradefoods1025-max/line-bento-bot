@@ -1954,7 +1954,90 @@ function formatOrderLines(items) {
     })
     .join('\n');
 }
+function getItemRiceSizeLabel(item) {
+  const value = String(item?.riceSize || '').trim();
 
+  if (value === 'small' || value === '小' || value === '小盛り') return '小盛り';
+  if (value === 'large' || value === '大' || value === '大盛り' || value === 'yes') return '大盛り';
+  if (value === 'normal' || value === '普通' || value === 'no') return '普通';
+
+  return '';
+}
+
+function getBaseItemDisplayName(item) {
+  if (!item) return '商品';
+
+  const baseName =
+    item.menuName ||
+    item.name ||
+    '商品';
+
+  const riceSize = getItemRiceSizeLabel(item);
+
+  if (riceSize) {
+    return `${baseName}（ご飯${riceSize}）`;
+  }
+
+  return baseName;
+}
+
+function formatFoodLines(items) {
+  const foods = (items || []).filter((item) => {
+    const menuKey = String(item?.menuKey || '');
+    const isDrinkItem =
+      item?.itemType === 'drink' ||
+      menuKey.startsWith(DRINK_KEY_PREFIX);
+    return !isDrinkItem;
+  });
+
+  if (!foods.length) return 'なし';
+
+  return foods
+    .map((item) => `・${getBaseItemDisplayName(item)} ×${Number(item?.qty || 0)}個`)
+    .join('\n');
+}
+
+function formatDrinkLines(items) {
+  const drinkRows = [];
+
+  (items || []).forEach((item) => {
+    const menuKey = String(item?.menuKey || '');
+    const qty = Number(item?.qty || 0);
+
+    if (item?.itemType === 'drink' || menuKey.startsWith(DRINK_KEY_PREFIX)) {
+      drinkRows.push(`・${item?.menuName || item?.name || 'ドリンク'} ×${qty}個`);
+      return;
+    }
+
+    if (item?.drinkName) {
+      drinkRows.push(`・${item.drinkName} ×${qty}個`);
+    }
+  });
+
+  if (!drinkRows.length) return 'なし';
+  return drinkRows.join('\n');
+}
+
+function getLargeRiceQty(items) {
+  return (items || []).reduce((sum, item) => {
+    const riceSize = getItemRiceSizeLabel(item);
+    if (riceSize === '大盛り') {
+      return sum + Number(item?.qty || 0);
+    }
+    return sum;
+  }, 0);
+}
+
+function hasDrinkItems(items) {
+  return (items || []).some((item) => {
+    const menuKey = String(item?.menuKey || '');
+    return (
+      item?.itemType === 'drink' ||
+      menuKey.startsWith(DRINK_KEY_PREFIX) ||
+      !!item?.drinkName
+    );
+  });
+}
 function getCartTotalQty(items) {
   return (Array.isArray(items) ? items : []).reduce(
     (sum, item) => sum + Number(item.qty || 0),
