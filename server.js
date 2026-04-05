@@ -1835,7 +1835,38 @@ function buildMenuStepMessages(session) {
     buildMenuFlexMessage(session)
   ];
 }
+function formatFoodLines(items) {
+  const foods = (items || []).filter((item) => {
+    const menuKey = String(item?.menuKey || '');
+    return !(item?.itemType === 'drink' || menuKey.startsWith(DRINK_KEY_PREFIX));
+  });
 
+  if (!foods.length) return 'なし';
+  return formatOrderLines(foods);
+}
+
+function getLargeRiceQty(items) {
+  return (items || []).reduce((sum, item) => {
+    const riceSize = normalizeRiceSizeLabel(item?.riceSize);
+    return riceSize === '大盛り' ? sum + Number(item?.qty || 0) : sum;
+  }, 0);
+}
+
+function hasDrinkItems(items) {
+  return (items || []).some((item) => {
+    const menuKey = String(item?.menuKey || '');
+    return (
+      item?.itemType === 'drink' ||
+      menuKey.startsWith(DRINK_KEY_PREFIX) ||
+      !!item?.drinkName
+    );
+  });
+}
+
+function formatPhoneForDisplay(phone) {
+  const value = String(phone || '').trim();
+  return value || '未設定';
+}
 function normalizeRiceSizeLabel(value) {
   const map = {
     small: '小盛り',
@@ -2101,27 +2132,194 @@ function buildChangeCurrentSummaryMessage(session) {
   );
 }
 
-function buildChangeMenuMessage(_session) {
-  return withNavQuickReply(
-    {
-      type: 'text',
-      text: 'どの項目を変更しますか？',
-      quickReply: {
-        items: [
-          quickPostbackItem('受取日', `action=${CHANGE_DATE_ACTION}`, '受取日を変更'),
-          quickPostbackItem('受取時間', `action=${CHANGE_TIME_ACTION}`, '受取時間を変更'),
-          quickPostbackItem('名前', `action=${CHANGE_NAME_ACTION}`, '名前を変更'),
-          quickPostbackItem('電話番号', `action=${CHANGE_PHONE_ACTION}`, '電話番号を変更'),
-          quickPostbackItem('商品を追加', `action=${CHANGE_ADD_ITEMS_ACTION}`, '商品を追加'),
-          quickPostbackItem('商品を入れ替える', `action=${CHANGE_ITEMS_ACTION}`, '商品を入れ替える'),
-          quickPostbackItem('変更内容を確認', `action=${CHANGE_REVIEW_ACTION}`, '変更内容を確認'),
-          quickPostbackItem('予約を確定する', `action=${CHANGE_CONFIRM_ACTION}`, '変更を確定する'),
-          quickPostbackItem('予約をキャンセル', `action=${CHANGE_CANCEL_REQUEST_ACTION}`, '予約をキャンセル')
+function safeChangeMenuText(value, fallback = '未設定') {
+  const text = String(value || '').trim();
+  return text || fallback;
+}
+
+function buildChangeItemsText(items) {
+  if (!Array.isArray(items) || !items.length) return '未設定';
+
+  return (
+    `${formatOrderLines(items)}\n` +
+    `合計 ${getCartTotalQty(items)}個 / ¥${Number(getCartTotalAmount(items)).toLocaleString('ja-JP')}`
+  );
+}
+
+function buildChangeMenuRow(label, value, actionData, displayText) {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    spacing: 'md',
+    paddingAll: '12px',
+    margin: 'md',
+    cornerRadius: '12px',
+    borderWidth: '1px',
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    action: {
+      type: 'postback',
+      label,
+      data: actionData,
+      displayText
+    },
+    contents: [
+      {
+        type: 'box',
+        layout: 'vertical',
+        flex: 1,
+        spacing: 'xs',
+        contents: [
+          {
+            type: 'text',
+            text: label,
+            size: 'sm',
+            weight: 'bold',
+            color: '#111111'
+          },
+          {
+            type: 'text',
+            text: value,
+            size: 'sm',
+            color: '#444444',
+            wrap: true
+          }
+        ]
+      },
+      {
+        type: 'box',
+        layout: 'vertical',
+        flex: 0,
+        justifyContent: 'center',
+        contents: [
+          {
+            type: 'text',
+            text: '変更',
+            size: 'sm',
+            weight: 'bold',
+            color: '#16A34A'
+          }
         ]
       }
-    },
-    { includeBack: true, includeCancel: true }
-  );
+    ]
+  };
+}
+
+function buildChangeMenuMessage(session) {
+  return {
+    type: 'flex',
+    altText: '変更したい項目をお選びください',
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: '16px',
+        backgroundColor: '#FFFDF7',
+        contents: [
+          {
+            type: 'text',
+            text: '変更したい項目をお選びください🙋‍♀️',
+            size: 'lg',
+            weight: 'bold',
+            wrap: true,
+            color: '#111111'
+          },
+          {
+            type: 'text',
+            text: '現在の内容を確認しながら、変更したい項目をタップできます。',
+            size: 'xs',
+            color: '#666666',
+            wrap: true,
+            margin: 'sm'
+          },
+          {
+            type: 'separator',
+            margin: 'md'
+          },
+          buildChangeMenuRow(
+            'メニュー追加',
+            '現在の注文に商品を追加',
+            `action=${CHANGE_ADD_ITEMS_ACTION}`,
+            'メニューを追加'
+          ),
+          buildChangeMenuRow(
+            'メニュー変更',
+            buildChangeItemsText(session && session.items),
+            `action=${CHANGE_ITEMS_ACTION}`,
+            'メニューを変更'
+          ),
+          buildChangeMenuRow(
+            '受取日',
+            session && session.date ? formatDateWithWeekday(session.date) : '未設定',
+            `action=${CHANGE_DATE_ACTION}`,
+            '受取日を変更'
+          ),
+          buildChangeMenuRow(
+            '受取時間',
+            safeChangeMenuText(session && session.time, '未設定'),
+            `action=${CHANGE_TIME_ACTION}`,
+            '受取時間を変更'
+          ),
+          buildChangeMenuRow(
+            'お名前',
+            session && session.name ? `${session.name}様` : '未設定',
+            `action=${CHANGE_NAME_ACTION}`,
+            '名前を変更'
+          ),
+          buildChangeMenuRow(
+            '電話番号',
+            formatPhoneForDisplay(session && session.phone),
+            `action=${CHANGE_PHONE_ACTION}`,
+            '電話番号を変更'
+          )
+        ]
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        paddingAll: '16px',
+        contents: [
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '変更内容確認',
+              data: `action=${CHANGE_REVIEW_ACTION}`,
+              displayText: '変更内容確認'
+            }
+          },
+          {
+            type: 'button',
+            style: 'primary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '変更確定',
+              data: `action=${CHANGE_CONFIRM_ACTION}`,
+              displayText: '変更確定'
+            }
+          },
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '予約をキャンセル',
+              data: `action=${CHANGE_CANCEL_REQUEST_ACTION}`,
+              displayText: '予約をキャンセル'
+            }
+          }
+        ]
+      }
+    }
+  };
 }
 
 function isReservationComplete(session) {
