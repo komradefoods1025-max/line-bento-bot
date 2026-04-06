@@ -1731,10 +1731,12 @@ function buildDrinkBubble(drink) {
 
 function buildMenuFlexMessage(session) {
   const bubbles = [];
-  const dailyMenu = resolveMenuByKey(session, DAILY_MENU_KEY);
-  if (dailyMenu && dailyMenu.visible !== false) {
-    bubbles.push(buildMenuBubble(DAILY_MENU_KEY, dailyMenu));
-  }
+
+  // 日替わりは一時的に非表示
+  // const dailyMenu = resolveMenuByKey(session, DAILY_MENU_KEY);
+  // if (dailyMenu && dailyMenu.visible !== false) {
+  //   bubbles.push(buildMenuBubble(DAILY_MENU_KEY, dailyMenu));
+  // }
 
   Object.entries(MENUS).forEach(([key]) => {
     const menu = resolveMenuByKey(session, key);
