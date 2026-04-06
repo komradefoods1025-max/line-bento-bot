@@ -1415,38 +1415,57 @@ function formatDateWithWeekday(dateText) {
   return `${Number(month)}/${Number(day)}（${getWeekdayJp(date)}）`;
 }
 
-function getAvailablePickupTimesForDate(dateText) {
-  const normalizedDate = normalizeYmdDate(dateText);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) return [];
+function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
+  const normalizedDate = normalizeYmdDate(dateStr);
 
-  const nowParts = getJstParts();
-  const today = `${nowParts.year}-${pad2(nowParts.month)}-${pad2(nowParts.day)}`;
-
-  if (normalizedDate !== today) {
-    return [...PICKUP_TIMES];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    return PICKUP_TIMES;
   }
 
-  const now = new Date();
+  if (normalizedDate < ORDER_START_DATE) {
+    return [];
+  }
+
+  const todayJst = getNowJstDateLabel(now);
+
+  if (normalizedDate !== todayJst) {
+    return PICKUP_TIMES;
+  }
+
+  const threshold = new Date(now.getTime() + SAME_DAY_LEAD_MINUTES * 60 * 1000);
+
   return PICKUP_TIMES.filter((time) => {
-    const pickupAt = jstDateTimeToUtcDate(normalizedDate, time);
-    const diffMinutes = Math.floor((pickupAt.getTime() - now.getTime()) / 60000);
-    return diffMinutes >= SAME_DAY_LEAD_MINUTES;
+    const pickupDateTime = jstDateTimeToUtcDate(normalizedDate, time);
+    return pickupDateTime.getTime() >= threshold.getTime();
   });
 }
 
-function buildEffectiveAvailableDates(rawDates) {
-  const uniqueDates = Array.from(
-    new Set(
-      (Array.isArray(rawDates) ? rawDates : [])
-        .map((date) => normalizeYmdDate(date))
-        .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-    )
-  ).sort();
+function getNowJstDateLabel(now = new Date()) {
+  const parts = getJstParts(now);
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`;
+}
 
-  return uniqueDates.filter((date) => {
-    if (ORDER_START_DATE && date < ORDER_START_DATE) return false;
-    return getAvailablePickupTimesForDate(date).length > 0;
-  }).slice(0, BOOKABLE_DATE_COUNT);
+function filterAvailableDatesByPickupTime(dates, now = new Date()) {
+  return (dates || []).filter((date) => getAvailablePickupTimesForDate(date, now).length > 0);
+}
+
+function buildEffectiveAvailableDates(rawDates, now = new Date()) {
+  const normalized = (rawDates || [])
+    .map((date) => normalizeYmdDate(date))
+    .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
+    .filter((date) => date >= ORDER_START_DATE);
+
+  const mergedDateSet = new Set(normalized);
+  const todayJst = getNowJstDateLabel(now);
+
+  if (
+    todayJst >= ORDER_START_DATE &&
+    getAvailablePickupTimesForDate(todayJst, now).length > 0
+  ) {
+    mergedDateSet.add(todayJst);
+  }
+
+  return filterAvailableDatesByPickupTime(Array.from(mergedDateSet), now).sort();
 }
 
 function buildTimeMessage(dateText) {
