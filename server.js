@@ -169,7 +169,10 @@ app.get('/api/liff-config', async (_req, res) => {
     const pickupTimesByDate = Object.fromEntries(
       availableDates.map((date) => [date, getAvailablePickupTimesForDate(date)])
     );
+const sessions = new Map();
 
+const startTapLocks = new Map();
+const START_TAP_LOCK_MS = 3000;
     res.json({
       liffId: LIFF_ID,
       bookableDateCount: BOOKABLE_DATE_COUNT,
@@ -604,6 +607,10 @@ if (isReviewText(text)) {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
+  if (isStartTapLocked(userId)) {
+    return;
+  }
+
   await startLineLoading(userId, 10);
   await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
   await sleep(1500);
@@ -1147,7 +1154,21 @@ function sleep(ms) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+function isStartTapLocked(userId) {
+  const now = Date.now();
+  const last = Number(startTapLocks.get(userId) || 0);
+
+  if (last && now - last < START_TAP_LOCK_MS) {
+    return true;
+  }
+
+  startTapLocks.set(userId, now);
+  return false;
+}
 function isStartTapLocked(userId) {
   const now = Date.now();
   const last = Number(startTapLocks.get(userId) || 0);
