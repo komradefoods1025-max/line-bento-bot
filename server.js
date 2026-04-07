@@ -149,7 +149,8 @@ const PICKUP_TIMES = [
 ];
 
 const sessions = new Map();
-
+const startTapLocks = new Map();
+const START_TAP_LOCK_MS = 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/liff-config', async (_req, res) => {
@@ -413,14 +414,19 @@ const sourceId =
       return;
     }
 if (isStartReservationText(text) || isResetText(text)) {
+  if (isStartTapLocked(userId)) {
+    return;
+  }
+
   if (hasActiveSession(session)) {
     await clearPendingSession(userId);
     clearSession(userId);
   }
 
-  await startLineLoading(userId, 5);
+  await startLineLoading(userId, 10);
+  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
   await sleep(1200);
-  await beginReservationFlow(replyToken, userId);
+  await pushBeginReservationFlow(userId);
   return;
 }
     if (text.includes('予約日時|')) {
@@ -1135,7 +1141,24 @@ async function startLineLoading(userId, loadingSeconds = 5) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
+function isStartTapLocked(userId) {
+  const now = Date.now();
+  const last = Number(startTapLocks.get(userId) || 0);
+
+  if (last && now - last < START_TAP_LOCK_MS) {
+    return true;
+  }
+
+  startTapLocks.set(userId, now);
+  return false;
+}
 function buildBusyNoticeText(kind = 'processing') {
   switch (kind) {
     case 'check':
