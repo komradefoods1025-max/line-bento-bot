@@ -1455,8 +1455,8 @@ function formatDateWithWeekday(dateText) {
   const date = normalizeYmdDate(dateText);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return String(dateText || '');
 
-  const [, month, day] = date.match(/^(\d{4})-(\d{2})-(\d{2})$/) || [];
-  return `${Number(month)}/${Number(day)}（${getWeekdayJp(date)}）`;
+  const [, year, month, day] = date.match(/^(\d{4})-(\d{2})-(\d{2})$/) || [];
+  return `${Number(year)}/${Number(month)}/${Number(day)}（${getWeekdayJp(date)}）`;
 }
 
 function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
