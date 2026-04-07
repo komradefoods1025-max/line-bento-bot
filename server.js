@@ -1007,14 +1007,14 @@ if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
         return;
       }
 
-      transitionSession(session, 'waiting_name');
-      await savePendingSession(userId, session);
+      transitionSession(session, 'waiting_date');
+await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        buildCartSummaryMessage(session),
-        buildNameInputMessage()
-      ]);
-      return;
+await replyMessage(replyToken, [
+  buildCartSummaryMessage(session),
+  createDateSelectMessage()
+]);
+return;
     }
 
     if (data.action === 'confirm') {
@@ -1182,14 +1182,14 @@ async function prepareReservationFlow(userId) {
   session.availableDates = availableDates;
   session.menuStatuses = menuStatuses;
   session.history = [];
-  session.step = 'waiting_date';
+session.step = 'waiting_menu';
 
-  await savePendingSession(userId, session);
+await savePendingSession(userId, session);
 
-  return {
-    ok: true,
-    messages: [createDateSelectMessage()]
-  };
+return {
+  ok: true,
+  messages: buildMenuStepMessages(session)
+};
 }
 
 async function beginReservationFlow(replyToken, userId) {
