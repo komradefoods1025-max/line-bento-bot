@@ -1168,7 +1168,7 @@ function buildBusyNoticeText(kind = 'processing') {
     case 'processing':
     default:
       return textMessage(
-        'ただいま処理をしております✨\n何も押さずにお待ちください🙇‍♂️'
+        'ただいま処理をしております✨\n何も押さずにお待ちください🙇‍♂️\n※何度も押すとエラーになります💦'
       );
   }
 }
@@ -1274,7 +1274,7 @@ function createDateSelectMessage() {
   return withNavQuickReply(
     {
       type: 'text',
-      text: `${STORE_NAME}のお弁当予約です🍱`,
+      text: 'お受け取り日のカレンダーを読み込んでいますのでこのままお待ちください🗓️',
       quickReply: {
         items: [
           {
