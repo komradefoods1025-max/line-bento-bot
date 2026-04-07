@@ -1168,7 +1168,7 @@ function buildBusyNoticeText(kind = 'processing') {
     case 'processing':
     default:
       return textMessage(
-        'ただいま処理をしております✨\n何も押さずにお待ちください🙇‍♂️\n※電波状況やご注文が多数入っている時は読み込みまでにお時間がかかる場合があります⌛️'
+        'ただいま処理をしております✨\n何も押さずにお待ちください🙇‍♂️\n\n電波状況やご注文が多数\n入っている時は読み込みまでに\nお時間がかかる場合があります⌛️'
       );
   }
 }
