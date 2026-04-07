@@ -2689,35 +2689,36 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
     return;
   }
 
-  currentSession.flowType = 'new';
-  currentSession.availableDates = availableDates;
-  currentSession.menuStatuses = menuStatuses;
-  currentSession.date = normalizedDate;
-  currentSession.time = normalizedTime;
-  currentSession.items = [];
-  currentSession.currentSelection = null;
-  currentSession.name = '';
-  currentSession.phone = '';
-  currentSession.history = [];
-  currentSession.step = 'waiting_menu';
+ currentSession.flowType = 'new';
+currentSession.availableDates = availableDates;
+currentSession.menuStatuses = menuStatuses;
+currentSession.date = normalizedDate;
+currentSession.time = normalizedTime;
+currentSession.currentSelection = null;
+currentSession.step = 'waiting_name';
 
-  const menuResult = await fetchDailyMenu(normalizedDate);
-  currentSession.dailyMenu = menuResult?.ok && menuResult.menu
-    ? {
-        ...DEFAULT_DAILY_MENU,
-        ...menuResult.menu,
-        allowLargeRice: menuResult.menu.allowLargeRice !== false
-      }
-    : { ...DEFAULT_DAILY_MENU };
+const menuResult = await fetchDailyMenu(normalizedDate);
+currentSession.dailyMenu = menuResult?.ok && menuResult.menu
+  ? {
+      ...DEFAULT_DAILY_MENU,
+      ...menuResult.menu,
+      allowLargeRice: menuResult.menu.allowLargeRice !== false
+    }
+  : { ...DEFAULT_DAILY_MENU };
 
-  await savePendingSession(userId, currentSession);
+await savePendingSession(userId, currentSession);
 
-  await replyMessage(replyToken, [
-    textMessage(
-      `受取日：${formatDateWithWeekday(normalizedDate)}\n受取時間：${normalizedTime}`
-    ),
-    ...buildMenuStepMessages(currentSession)
-  ]);
+await replyMessage(replyToken, [
+  textMessage(
+    `ご注文内容はこちらです。\n\n` +
+      `受取日：${formatDateWithWeekday(normalizedDate)}\n` +
+      `受取時間：${normalizedTime}\n` +
+      `ご注文内容：\n${formatOrderLines(currentSession.items)}\n` +
+      `合計個数：${getCartTotalQty(currentSession.items)}個\n` +
+      `注文合計：¥${Number(getCartTotalAmount(currentSession.items)).toLocaleString('ja-JP')}`
+  ),
+  buildNameInputMessage()
+]);
 }
 
 async function handleSelectedDate(replyToken, userId, session, selectedDate) {
