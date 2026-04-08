@@ -1946,15 +1946,25 @@ function textMessage(text, quickReply) {
   };
 }
 
-function quickPostbackItem(label, data, displayText) {
+function quickPostbackItem(label, data, displayText = label, options = {}) {
+  const action = {
+    type: 'postback',
+    label,
+    data,
+    displayText
+  };
+
+  if (options.inputOption) {
+    action.inputOption = options.inputOption;
+  }
+
+  if (typeof options.fillInText === 'string' && options.fillInText.length > 0) {
+    action.fillInText = options.fillInText;
+  }
+
   return {
     type: 'action',
-    action: {
-      type: 'postback',
-      label,
-      data,
-      displayText: displayText || label
-    }
+    action
   };
 }
 
