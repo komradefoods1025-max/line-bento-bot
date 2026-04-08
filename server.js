@@ -1088,71 +1088,71 @@ if (data.action === 'open_phone_input') {
       return;
     }
 
-    if (data.action === 'review_order') {
-      if (!session.items.length) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('まだ商品が入っていません。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+if (data.action === 'review_order') {
+  if (!session.items.length) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('まだ商品が入っていません。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      transitionSession(session, 'waiting_date');
-      await savePendingSession(userId, session);
+  transitionSession(session, 'waiting_date');
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        buildCartSummaryMessage(session),
-        createDateSelectMessage()
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    buildCartSummaryMessage(session),
+    createDateSelectMessage()
+  ]);
+  return;
+}
 
-    if (data.action === 'confirm') {
-      if (!isReservationComplete(session)) {
-        await startLineLoading(userId, 5);
-        await beginReservationFlow(replyToken, userId);
-        return;
-      }
+if (data.action === 'confirm') {
+  if (!isReservationComplete(session)) {
+    await startLineLoading(userId, 5);
+    await beginReservationFlow(replyToken, userId);
+    return;
+  }
 
-      const reservation = {
-        reservationNo: createReservationNo(),
-        userId,
-        date: session.date,
-        time: session.time,
-        items: session.items.map((item) => ({ ...item })),
-        itemCount: session.items.length,
-        totalQty: getCartTotalQty(session.items),
-        total: getCartTotalAmount(session.items),
-        name: session.name,
-        phone: session.phone,
-        status: '受付済み',
-        createdAt: getJstDateTimeLabel()
-      };
+  const reservation = {
+    reservationNo: createReservationNo(),
+    userId,
+    date: session.date,
+    time: session.time,
+    items: session.items.map((item) => ({ ...item })),
+    itemCount: session.items.length,
+    totalQty: getCartTotalQty(session.items),
+    total: getCartTotalAmount(session.items),
+    name: session.name,
+    phone: session.phone,
+    status: '受付済み',
+    createdAt: getJstDateTimeLabel()
+  };
 
-      const saveResult = await saveReservationToSheet(reservation);
+  const saveResult = await saveReservationToSheet(reservation);
 
-      if (!saveResult.ok) {
-        await replyMessage(replyToken, [
-          textMessage(
-            `予約内容の保存でエラーが起きました。\n${saveResult.error}`
-          )
-        ]);
-        return;
-      }
+  if (!saveResult.ok) {
+    await replyMessage(replyToken, [
+      textMessage(
+        `予約内容の保存でエラーが起きました。\n${saveResult.error}`
+      )
+    ]);
+    return;
+  }
 
-      notifyStoreByLine(reservation).catch((err) =>
-        console.error('store line notify error:', err)
-      );
+  notifyStoreByLine(reservation).catch((err) =>
+    console.error('store line notify error:', err)
+  );
 
-      clearSession(userId);
-      await clearPendingSession(userId);
+  clearSession(userId);
+  await clearPendingSession(userId);
 
-      await replyMessage(replyToken, [
-        buildReservationCompleteMessage(reservation)
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    buildReservationCompleteMessage(reservation)
+  ]);
+  return;
+}
   }
 }
 
