@@ -650,6 +650,11 @@ async function handleEvent(event) {
     return;
   }
 
+  transitionSession(session, 'waiting_name');
+  await savePendingSession(userId, session);
+  return;
+}
+
   const isChangeFlow = session.step === 'change_waiting_name';
 
   if (!isChangeFlow) {
