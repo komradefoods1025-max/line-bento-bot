@@ -526,15 +526,23 @@ async function handleEvent(event) {
     }
 
     if (session?.step === 'waiting_name') {
-      transitionSession(session, 'waiting_phone', { name: text });
-      await savePendingSession(userId, session);
+  const name = String(text || '').trim();
 
-      await replyMessage(replyToken, [
-        textMessage(`ご予約名：${text}`),
-        buildPhoneInputMessage()
-      ]);
-      return;
-    }
+  if (!name) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [buildNameInputMessage()]);
+    return;
+  }
+
+  transitionSession(session, 'waiting_phone', { name });
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(`ご予約名：${name}`),
+    buildPhoneInputMessage()
+  ]);
+  return;
+}
 
     if (session?.step === 'waiting_phone') {
       const phone = normalizePhone(text);
