@@ -495,7 +495,7 @@ async function handleEvent(event) {
     }
 
     if (session?.step === 'change_waiting_date' && isYmdDate(text)) {
-      await handleSelectedDate(replyToken session, text);
+      await handleSelectedDate(replyToken, userId, session, text);
       return;
     }
 
@@ -911,7 +911,10 @@ async function handleEvent(event) {
 
         await replyMessage(replyToken, [
           textMessage(`ドリンク：${drink.name} を付けます。`),
-          buildQtyMessage(getCurrentSelectionLabel(session.currentSelection), 'food')
+          buildQtyMessage(
+            getCurrentSelectionLabel(session.currentSelection),
+            'food'
+          )
         ]);
         return;
       }
@@ -1153,7 +1156,7 @@ async function startLineLoading(userId, loadingSeconds = 5) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CHANNEL_ACCESS_TOKEN}`
+        Authorization: `Bearer ${CHANNEL_ACCESS_TOKEN}`
       },
       body: JSON.stringify({
         chatId: userId,
