@@ -506,26 +506,26 @@ async function handleEvent(event) {
     }
 
     if (isReviewText(text)) {
-      if (!session?.items?.length) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('まだ商品が入っていません。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+  if (!session?.items?.length) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('まだ商品が入っていません。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      transitionSession(session, 'waiting_name');
-      await savePendingSession(userId, session);
+  transitionSession(session, 'waiting_name');
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        buildCartSummaryMessage(session),
-        buildNameInputMessage()
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    buildCartSummaryMessage(session),
+    buildNameInputMessage()
+  ]);
+  return;
+}
 
-    if (session?.step === 'waiting_name') {
+if (session?.step === 'waiting_name') {
   const name = String(text || '').trim();
 
   if (!name) {
@@ -544,29 +544,29 @@ async function handleEvent(event) {
   return;
 }
 
-    if (session?.step === 'waiting_phone') {
-      const phone = normalizePhone(text);
+if (session?.step === 'waiting_phone') {
+  const phone = normalizePhone(text);
 
-      if (!isValidPhone(phone)) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage(
-            '電話番号の形式が正しくありません。\n国内の電話番号を入力してください。\n例：09012345678 または 0312345678'
-          ),
-          buildPhoneInputMessage()
-        ]);
-        return;
-      }
+  if (!isValidPhone(phone)) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage(
+        '電話番号の形式が正しくありません。\n国内の電話番号を入力してください。\n例：09012345678 または 0312345678'
+      ),
+      buildPhoneInputMessage()
+    ]);
+    return;
+  }
 
-      transitionSession(session, 'confirm', { phone });
-      await savePendingSession(userId, session);
+  transitionSession(session, 'confirm', { phone });
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        textMessage(`電話番号：${phone}`),
-        buildConfirmMessage(session)
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    textMessage(`電話番号：${phone}`),
+    buildConfirmMessage(session)
+  ]);
+  return;
+}
 
     if (session?.step === 'change_waiting_name') {
       transitionSession(session, 'change_menu', { name: text });
