@@ -645,12 +645,52 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'open_name_input') {
-      return;
-    }
+  if (!session) {
+    await replyMessage(replyToken, [startGuideMessage()]);
+    return;
+  }
 
-    if (data.action === 'open_phone_input') {
-      return;
-    }
+  const isChangeFlow = session.step === 'change_waiting_name';
+
+  if (!isChangeFlow) {
+    transitionSession(session, 'waiting_name');
+  }
+
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(
+      isChangeFlow
+        ? '変更後のお名前を入力してください👤'
+        : 'お名前を入力してください👤'
+    )
+  ]);
+  return;
+}
+
+if (data.action === 'open_phone_input') {
+  if (!session) {
+    await replyMessage(replyToken, [startGuideMessage()]);
+    return;
+  }
+
+  const isChangeFlow = session.step === 'change_waiting_phone';
+
+  if (!isChangeFlow) {
+    transitionSession(session, 'waiting_phone');
+  }
+
+  await savePendingSession(userId, session);
+
+  await replyMessage(replyToken, [
+    textMessage(
+      isChangeFlow
+        ? '変更後の電話番号を入力してください📞\n例：09012345678'
+        : '電話番号を入力してください📞\n例：09012345678'
+    )
+  ]);
+  return;
+}
 
     if (data.action === BACK_ACTION) {
       await handleBackAction(replyToken, userId, session);
