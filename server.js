@@ -19,6 +19,7 @@ const STORE_CODE = 'KMR';
 const TIME_ZONE = 'Asia/Tokyo';
 const BOOKABLE_DATE_COUNT = 31;
 const ORDER_START_DATE = '2026-04-02';
+const MENU_IMAGE_URL = 'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/04/%E3%83%89%E3%83%AA%E3%83%B3%E3%82%AF%E3%83%A1%E3%83%8B%E3%83%A5%E3%83%BC%E2%91%A1.pdf.png';
 
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
@@ -395,58 +396,65 @@ const sourceId =
   }
 
   if (event.type === 'message' && event.message?.type === 'text') {
-    const rawText = event.message.text || '';
-    const text = normalizeWebhookText(rawText);
+  const rawText = event.message.text || '';
+  const text = normalizeWebhookText(rawText);
 
-    console.log(`[INCOMING ${APP_VERSION}]`, JSON.stringify(rawText));
+  console.log(`[INCOMING ${APP_VERSION}]`, JSON.stringify(rawText));
 
-    if (isNotifyIdText(text)) {
-  const guideText =
-    sourceType === 'group'
-      ? `このグループの通知先IDはこちらです。\n\n${sourceId}\n\nこのIDを Render の STORE_NOTIFY_GROUP_ID に入れてください。`
-      : `現在の通知先IDはこちらです。\n\n${sourceId}\n\nこのIDを Render の STORE_NOTIFY_LINE_ID に入れてください。`;
+  if (isNotifyIdText(text)) {
+    const guideText =
+      sourceType === 'group'
+        ? `このグループの通知先IDはこちらです。\n\n${sourceId}\n\nこのIDを Render の STORE_NOTIFY_GROUP_ID に入れてください。`
+        : `現在の通知先IDはこちらです。\n\n${sourceId}\n\nこのIDを Render の STORE_NOTIFY_LINE_ID に入れてください。`;
 
-  await replyMessage(replyToken, [textMessage(guideText)]);
-  return;
-}
-
-    if (!userId) {
-      await replyMessage(replyToken, [
-        textMessage('予約は bot との1対1トークでご利用ください。')
-      ]);
-      return;
-    }
-if (isStartReservationText(text) || isResetText(text)) {
-  if (isStartTapLocked(userId)) {
+    await replyMessage(replyToken, [textMessage(guideText)]);
     return;
   }
 
-  if (hasActiveSession(session)) {
-    await clearPendingSession(userId);
-    clearSession(userId);
+  if (!userId) {
+    await replyMessage(replyToken, [
+      textMessage('予約は bot との1対1トークでご利用ください。')
+    ]);
+    return;
   }
 
-  await startLineLoading(userId, 10);
-  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-  await sleep(1200);
-  await pushBeginReservationFlow(userId);
-  return;
-}
-    if (text.includes('予約日時|')) {
-      console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
+  if (text === 'メニュー') {
+    await replyMessage(replyToken, buildMenuImageMessages());
+    return;
+  }
 
-      const normalized = text.slice(text.indexOf('予約日時|'));
-      const [, selectedDate = '', selectedTime = ''] = normalized.split('|');
-
-      await handleSelectedDateTime(
-        replyToken,
-        userId,
-        session,
-        selectedDate,
-        selectedTime
-      );
+  if (isStartReservationText(text) || isResetText(text)) {
+    if (isStartTapLocked(userId)) {
       return;
     }
+
+    if (hasActiveSession(session)) {
+      await clearPendingSession(userId);
+      clearSession(userId);
+    }
+
+    await startLineLoading(userId, 10);
+    await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
+    await sleep(1200);
+    await pushBeginReservationFlow(userId);
+    return;
+  }
+
+  if (text.includes('予約日時|')) {
+    console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
+
+    const normalized = text.slice(text.indexOf('予約日時|'));
+    const [, selectedDate = '', selectedTime = ''] = normalized.split('|');
+
+    await handleSelectedDateTime(
+      replyToken,
+      userId,
+      session,
+      selectedDate,
+      selectedTime
+    );
+    return;
+  }
 
     if (isReservationViewText(text)) {
   await startLineLoading(userId, 5);
@@ -485,7 +493,7 @@ if (isReservationChangeText(text)) {
       return;
     }
 
-    if (session.step === 'waiting_date' && isYmdDate(text)) {
+    if (session?.step === 'waiting_date' && isYmdDate(text)) {
   await handleSelectedDate(replyToken, userId, session, text);
   return;
 }
@@ -603,10 +611,7 @@ if (isReviewText(text)) {
     return;
   }
 
-  if (event.type === 'postback' && userId) {
-    const data = parsePostbackData(event.postback?.data || '');
-
-    if (data.action === 'reserve_start' || data.action === 'restart') {
+  if (data.action === 'reserve_start' || data.action === 'restart') {
   if (isStartTapLocked(userId)) {
     return;
   }
@@ -614,6 +619,23 @@ if (isReviewText(text)) {
   await startLineLoading(userId, 10);
   await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
   await sleep(1500);
+  await pushBeginReservationFlow(userId);
+  return;
+}
+
+if (data.action === 'start_order_from_menu_image') {
+  if (isStartTapLocked(userId)) {
+    return;
+  }
+
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
+
+  await startLineLoading(userId, 10);
+  await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
+  await sleep(1200);
   await pushBeginReservationFlow(userId);
   return;
 }
@@ -1890,7 +1912,72 @@ function buildQtyMessage(name, itemType = 'food') {
     { includeBack: true, includeCancel: true }
   );
 }
+function textMessage(text, quickReply) {
+  return {
+    type: 'text',
+    text,
+    ...(quickReply ? { quickReply: { items: quickReply } } : {})
+  };
+}
 
+function quickPostbackItem(label, data, displayText) {
+  return {
+    type: 'action',
+    action: {
+      type: 'postback',
+      label,
+      data,
+      displayText: displayText || label
+    }
+  };
+}
+
+function formatPickupDateTimeForDisplay(dateStr, timeStr) {
+  const date = String(dateStr || '').trim();
+  const time = String(timeStr || '').trim();
+
+  if (!date) return time || '';
+
+  const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return `${date} ${time}`.trim();
+
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+
+  const dt = new Date(`${date}T00:00:00+09:00`);
+  const weeks = ['日', '月', '火', '水', '木', '金', '土'];
+  const week = Number.isNaN(dt.getTime()) ? '' : `（${weeks[dt.getDay()]}）`;
+
+  return `${year}/${month}/${day}${week} ${time}`.trim();
+}
+
+function buildMenuImageMessages() {
+  return [
+    {
+      type: 'image',
+      originalContentUrl: MENU_IMAGE_URL,
+      previewImageUrl: MENU_IMAGE_URL
+    },
+    {
+      type: 'text',
+      text: 'メニューはこちらです。\nご予約に進む場合は下のボタンを押してください。',
+      quickReply: {
+        items: [
+          {
+            type: 'action',
+            action: {
+              type: 'postback',
+              label: '予約へ進む',
+              data: 'action=start_order_from_menu_image',
+              displayText: '予約へ進む'
+            }
+          }
+        ]
+      }
+    }
+  ];
+}
 function buildMenuStepMessages(session) {
   return [
     withNavQuickReply(
@@ -1900,6 +1987,7 @@ function buildMenuStepMessages(session) {
     buildMenuFlexMessage(session)
   ];
 }
+
 function formatFoodLines(items) {
   const foods = (items || []).filter((item) => {
     const menuKey = String(item?.menuKey || '');
