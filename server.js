@@ -170,10 +170,7 @@ app.get('/api/liff-config', async (_req, res) => {
     const pickupTimesByDate = Object.fromEntries(
       availableDates.map((date) => [date, getAvailablePickupTimesForDate(date)])
     );
-const sessions = new Map();
 
-const startTapLocks = new Map();
-const START_TAP_LOCK_MS = 3000;
     res.json({
       liffId: LIFF_ID,
       bookableDateCount: BOOKABLE_DATE_COUNT,
@@ -260,6 +257,7 @@ app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
     return res.sendStatus(500);
   }
 });
+
 function normalizeActionToken(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -295,499 +293,813 @@ function getRichMenuIntentFromEvent(event) {
     return '';
   }
 
-  if (event.type === 'postback' && userId) {
-  const data = parsePostbackData(event.postback?.data || '');
+  if (event.type === 'postback') {
+    const data = parsePostbackData(event.postback?.data || '');
+    const action = normalizeActionToken(
+      data.action || data.mode || data.type || ''
+    );
+    const displayText = normalizeWebhookText(event.postback?.displayText || '');
 
-  if (data.action === 'reserve_start' || data.action === 'restart') {
-    if (isStartTapLocked(userId)) {
-      return;
+    if (
+      [
+        'reservation_view',
+        'reservation_confirm',
+        'view_reservation',
+        'show_reservation',
+        'begin_view'
+      ].includes(action)
+    ) {
+      return 'view';
     }
 
-    await startLineLoading(userId, 10);
-    await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-    await sleep(1500);
-    await pushBeginReservationFlow(userId);
-    return;
+    if (
+      [
+        'reservation_change',
+        'change_reservation',
+        'begin_change'
+      ].includes(action)
+    ) {
+      return 'change';
+    }
+
+    if (displayText) {
+      if (isReservationViewText(displayText)) return 'view';
+      if (isReservationChangeText(displayText)) return 'change';
+    }
   }
 
-  if (data.action === 'start_order_from_menu_image') {
-    if (isStartTapLocked(userId)) {
-      return;
-    }
+  return '';
+}
 
-    if (hasActiveSession(session)) {
-      await clearPendingSession(userId);
-      clearSession(userId);
-    }
+async function handleRichMenuEntry(event, replyToken, userId) {
+  const intent = getRichMenuIntentFromEvent(event);
 
-    await startLineLoading(userId, 10);
-    await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-    await sleep(1200);
-    await pushBeginReservationFlow(userId);
-    return;
+  if (!intent || !userId) return false;
+
+  if (intent === 'view') {
+    await startLineLoading(userId, 5);
+    await sleep(900);
+    await handleViewLatestReservation(replyToken, userId);
+    return true;
   }
 
-  if (data.action === 'begin_change') {
+  if (intent === 'change') {
+    await startLineLoading(userId, 5);
+    await sleep(900);
     await beginReservationChangeFlow(replyToken, userId);
-    return;
+    return true;
   }
 
-  if (data.action === 'open_name_input') {
-    return;
-  }
+  return false;
+}
 
-  if (data.action === 'open_phone_input') {
-    return;
-  }
+async function handleEvent(event) {
+  const replyToken = event.replyToken;
+  if (!replyToken) return;
 
-  if (data.action === BACK_ACTION) {
-    await handleBackAction(replyToken, userId, session);
-    return;
-  }
+  const sourceType = event.source?.type || '';
+  const sourceId =
+    sourceType === 'group'
+      ? event.source?.groupId || ''
+      : sourceType === 'room'
+        ? event.source?.roomId || ''
+        : event.source?.userId || '';
 
-  if (data.action === CANCEL_ACTION) {
-    await handleCancelAction(replyToken, userId);
-    return;
-  }
+  const userId = event.source?.userId || null;
+  const session = userId ? await loadSession(userId) : null;
 
-  if (data.action === CHANGE_DATE_ACTION) {
-    transitionSession(session, 'change_waiting_date');
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      textMessage('変更後の受取日を選んでください。'),
-      createDateSelectMessage()
-    ]);
-    return;
-  }
+  if (event.type === 'join' && sourceType === 'group') {
+    console.log(`[GROUP JOIN ${APP_VERSION}]`, sourceId);
 
-  if (data.action === CHANGE_TIME_ACTION) {
-    transitionSession(session, 'change_waiting_time');
-    await savePendingSession(userId, session);
     await replyMessage(replyToken, [
       textMessage(
-        `変更後の受取時間を選んでください。\n現在の受取日：${formatDateWithWeekday(session.date)}`
-      ),
-      buildTimeMessage(session.date)
-    ]);
-    return;
-  }
-
-  if (data.action === CHANGE_NAME_ACTION) {
-    transitionSession(session, 'change_waiting_name');
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [buildChangeNameInputMessage()]);
-    return;
-  }
-
-  if (data.action === CHANGE_PHONE_ACTION) {
-    transitionSession(session, 'change_waiting_phone');
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [buildChangePhoneInputMessage()]);
-    return;
-  }
-
-  if (data.action === CHANGE_ADD_ITEMS_ACTION) {
-    session.currentSelection = null;
-    transitionSession(session, 'waiting_menu');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      textMessage('現在のご注文に商品を追加してください🍱'),
-      ...buildMenuStepMessages(session)
-    ]);
-    return;
-  }
-
-  if (data.action === CHANGE_ITEMS_ACTION) {
-    session.items = [];
-    session.currentSelection = null;
-    transitionSession(session, 'waiting_menu');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      textMessage(`変更後のメニューを選んでください🍱
-いまのメニュー内容は一度リセットされます。`),
-      ...buildMenuStepMessages(session)
-    ]);
-    return;
-  }
-
-  if (data.action === CHANGE_REVIEW_ACTION) {
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, [
-      buildChangeCurrentSummaryMessage(session),
-      buildChangeMenuMessage(session)
-    ]);
-    return;
-  }
-
-  if (data.action === CHANGE_CANCEL_REQUEST_ACTION) {
-    await replyMessage(replyToken, [
-      withNavQuickReply(
-        {
-          type: 'text',
-          text: 'この予約自体をキャンセルしますか？\n※この操作でご予約は取り消しになります。',
-          quickReply: {
-            items: [
-              quickPostbackItem(
-                'はい、キャンセルする',
-                `action=${CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION}`,
-                'はい、キャンセルする'
-              )
-            ]
-          }
-        },
-        { includeBack: true, includeCancel: false }
+        '通知グループへの参加が完了しました。\nこのグループで「通知先ID」と送ると、Render に入れるグループIDを確認できます。'
       )
     ]);
     return;
   }
 
-  if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
-    await handleReservationCancelConfirm(replyToken, userId, session);
+  if (event.type === 'follow' && userId) {
+    clearSession(userId);
+    await clearPendingSession(userId);
+    await replyMessage(replyToken, [startGuideMessage()]);
     return;
   }
 
-  if (data.action === CHANGE_CONFIRM_ACTION) {
-    await handleReservationChangeConfirm(replyToken, userId, session);
-    return;
+  if (userId && (event.type === 'message' || event.type === 'postback')) {
+    const handled = await handleRichMenuEntry(event, replyToken, userId);
+    if (handled) return;
   }
 
-  if (data.action === 'pick_date') {
-    const selectedDate = event.postback?.params?.date || '';
-    await handleSelectedDate(replyToken, userId, session, selectedDate);
-    return;
-  }
+  if (event.type === 'message' && event.message?.type === 'text') {
+    const rawText = event.message.text || '';
+    const text = normalizeWebhookText(rawText);
 
-  if (data.action === 'time') {
-    const selectedTime = data.value || '';
-    const availableTimes = getAvailablePickupTimesForDate(session.date);
+    console.log(`[INCOMING ${APP_VERSION}]`, JSON.stringify(rawText));
 
-    if (!availableTimes.includes(selectedTime)) {
-      await savePendingSession(userId, session);
+    if (isNotifyIdText(text)) {
+      const guideText =
+        sourceType === 'group'
+          ? `このグループの通知先IDはこちらです。\n\n${sourceId}\n\nこのIDを Render の STORE_NOTIFY_GROUP_ID に入れてください。`
+          : `現在の通知先IDはこちらです。\n\n${sourceId}\n\nこのIDを Render の STORE_NOTIFY_LINE_ID に入れてください。`;
+
+      await replyMessage(replyToken, [textMessage(guideText)]);
+      return;
+    }
+
+    if (!userId) {
       await replyMessage(replyToken, [
-        textMessage(
-          `受取時間をもう一度選んでください。\n本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降からご予約いただけます。`
-        ),
-        buildTimeMessage(session.date)
+        textMessage('予約は bot との1対1トークでご利用ください。')
       ]);
       return;
     }
 
-    if (session.flowType === 'change') {
-      transitionSession(session, 'change_menu', { time: selectedTime });
+    if (text === 'メニュー') {
+      await replyMessage(replyToken, buildMenuImageMessages());
+      return;
+    }
+
+    if (isStartReservationText(text) || isResetText(text)) {
+      if (isStartTapLocked(userId)) {
+        return;
+      }
+
+      if (hasActiveSession(session)) {
+        await clearPendingSession(userId);
+        clearSession(userId);
+      }
+
+      await startLineLoading(userId, 10);
+      await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
+      await sleep(1200);
+      await pushBeginReservationFlow(userId);
+      return;
+    }
+
+    if (text.includes('予約日時|')) {
+      console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
+
+      const normalized = text.slice(text.indexOf('予約日時|'));
+      const [, selectedDate = '', selectedTime = ''] = normalized.split('|');
+
+      await handleSelectedDateTime(
+        replyToken,
+        userId,
+        session,
+        selectedDate,
+        selectedTime
+      );
+      return;
+    }
+
+    if (isReservationViewText(text)) {
+      await startLineLoading(userId, 5);
+      await sleep(900);
+      await handleViewLatestReservation(replyToken, userId);
+      return;
+    }
+
+    if (isReservationChangeText(text)) {
+      await startLineLoading(userId, 5);
+      await sleep(900);
+      await beginReservationChangeFlow(replyToken, userId);
+      return;
+    }
+
+    if (isResumeText(text)) {
+      if (hasActiveSession(session)) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, buildResumeMessages(session));
+        return;
+      }
+
+      await startLineLoading(userId, 5);
+      await sleep(1200);
+      await beginReservationFlow(replyToken, userId);
+      return;
+    }
+
+    if (hasActiveSession(session) && isBackText(text)) {
+      await handleBackAction(replyToken, userId, session);
+      return;
+    }
+
+    if (hasActiveSession(session) && isCancelText(text)) {
+      await handleCancelAction(replyToken, userId);
+      return;
+    }
+
+    if (session?.step === 'waiting_date' && isYmdDate(text)) {
+      await handleSelectedDate(replyToken, userId, session, text);
+      return;
+    }
+
+    if (session?.step === 'change_waiting_date' && isYmdDate(text)) {
+      await handleSelectedDate(replyToken session, text);
+      return;
+    }
+
+    if (session?.step === 'waiting_qty' && isQtyText(text)) {
+      const qty = parseQtyText(text);
+      await handleQtySelection(replyToken, userId, session, qty);
+      return;
+    }
+
+    if (isReviewText(text)) {
+      if (!session?.items?.length) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('まだ商品が入っていません。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'waiting_name');
       await savePendingSession(userId, session);
 
       await replyMessage(replyToken, [
-        textMessage(`変更後の受取時間：${selectedTime}`),
+        buildCartSummaryMessage(session),
+        buildNameInputMessage()
+      ]);
+      return;
+    }
+
+    if (session?.step === 'waiting_name') {
+      transitionSession(session, 'waiting_phone', { name: text });
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`ご予約名：${text}`),
+        buildPhoneInputMessage()
+      ]);
+      return;
+    }
+
+    if (session?.step === 'waiting_phone') {
+      const phone = normalizePhone(text);
+
+      if (!isValidPhone(phone)) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(
+            '電話番号の形式が正しくありません。\n国内の電話番号を入力してください。\n例：09012345678 または 0312345678'
+          ),
+          buildPhoneInputMessage()
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'confirm', { phone });
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`電話番号：${phone}`),
+        buildConfirmMessage(session)
+      ]);
+      return;
+    }
+
+    if (session?.step === 'change_waiting_name') {
+      transitionSession(session, 'change_menu', { name: text });
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`お名前を変更しました：${text}`),
         buildChangeCurrentSummaryMessage(session),
         buildChangeMenuMessage(session)
       ]);
       return;
     }
 
-    transitionSession(session, 'waiting_menu', { time: selectedTime });
-    await savePendingSession(userId, session);
+    if (session?.step === 'change_waiting_phone') {
+      const phone = normalizePhone(text);
 
-    await replyMessage(replyToken, [
-      textMessage(`受取時間：${selectedTime}`),
-      ...buildMenuStepMessages(session)
-    ]);
+      if (!isValidPhone(phone)) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(
+            '電話番号の形式が正しくありません。\n国内の電話番号を入力してください。\n例：09012345678 または 0312345678'
+          ),
+          buildChangePhoneInputMessage()
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'change_menu', { phone });
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`電話番号を変更しました：${phone}`),
+        buildChangeCurrentSummaryMessage(session),
+        buildChangeMenuMessage(session)
+      ]);
+      return;
+    }
+
+    if (hasActiveSession(session)) {
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, buildResumeMessages(session));
+      return;
+    }
+
+    await replyMessage(replyToken, [startGuideMessage()]);
     return;
   }
 
-  if (data.action === 'menu') {
-    const menu = resolveMenuByKey(session, data.item || '');
+  if (event.type === 'postback' && userId) {
+    const data = parsePostbackData(event.postback?.data || '');
 
-    if (!menu) {
+    if (data.action === 'reserve_start' || data.action === 'restart') {
+      if (isStartTapLocked(userId)) {
+        return;
+      }
+
+      await startLineLoading(userId, 10);
+      await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
+      await sleep(1500);
+      await pushBeginReservationFlow(userId);
+      return;
+    }
+
+    if (data.action === 'start_order_from_menu_image') {
+      if (isStartTapLocked(userId)) {
+        return;
+      }
+
+      if (hasActiveSession(session)) {
+        await clearPendingSession(userId);
+        clearSession(userId);
+      }
+
+      await startLineLoading(userId, 10);
+      await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
+      await sleep(1200);
+      await pushBeginReservationFlow(userId);
+      return;
+    }
+
+    if (data.action === 'begin_change') {
+      await beginReservationChangeFlow(replyToken, userId);
+      return;
+    }
+
+    if (data.action === 'open_name_input') {
+      return;
+    }
+
+    if (data.action === 'open_phone_input') {
+      return;
+    }
+
+    if (data.action === BACK_ACTION) {
+      await handleBackAction(replyToken, userId, session);
+      return;
+    }
+
+    if (data.action === CANCEL_ACTION) {
+      await handleCancelAction(replyToken, userId);
+      return;
+    }
+
+    if (data.action === CHANGE_DATE_ACTION) {
+      transitionSession(session, 'change_waiting_date');
       await savePendingSession(userId, session);
       await replyMessage(replyToken, [
-        textMessage('メニューが見つかりませんでした。'),
-        ...buildMenuStepMessages(session)
+        textMessage('変更後の受取日を選んでください。'),
+        createDateSelectMessage()
       ]);
       return;
     }
 
-    if (menu.visible === false) {
+    if (data.action === CHANGE_TIME_ACTION) {
+      transitionSession(session, 'change_waiting_time');
       await savePendingSession(userId, session);
-      await replyMessage(replyToken, [
-        textMessage(`申し訳ありません、${menu.name}は現在表示停止中です。`),
-        ...buildMenuStepMessages(session)
-      ]);
-      return;
-    }
-
-    if (menu.soldOut) {
-      await savePendingSession(userId, session);
-      await replyMessage(replyToken, [
-        textMessage(`申し訳ありません、${menu.name}は売り切れです🙇‍♂️\n別の商品をお選びください。`),
-        ...buildMenuStepMessages(session)
-      ]);
-      return;
-    }
-
-    session.currentSelection = {
-      itemType: 'food',
-      menuKey: data.item,
-      menuName: menu.name,
-      price: Number(menu.price || 0),
-      riceSize: '',
-      allowLargeRice: !!menu.allowLargeRice,
-      drinkKey: '',
-      drinkName: '',
-      drinkPrice: 0
-    };
-
-    if (menu.allowLargeRice) {
-      transitionSession(session, 'waiting_rice_size');
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        textMessage(`ご注文商品：${menu.name}`),
-        buildLargeRiceMessage(menu.name)
-      ]);
-      return;
-    }
-
-    if (canOfferDrinkForSelection(session.currentSelection)) {
-      transitionSession(session, 'waiting_drink_confirm');
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        textMessage(`ご注文商品：${menu.name}`),
-        buildDrinkConfirmMessage(menu.name)
-      ]);
-      return;
-    }
-
-    transitionSession(session, 'waiting_qty');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      textMessage(`ご注文商品：${menu.name}`),
-      buildQtyMessage(menu.name, 'food')
-    ]);
-    return;
-  }
-
-  if (data.action === 'drink') {
-    const drink = resolveDrinkByKey(data.item || '');
-
-    if (!drink || drink.visible === false) {
-      await savePendingSession(userId, session);
-      await replyMessage(replyToken, [
-        textMessage('ドリンクが見つかりませんでした。'),
-        ...buildMenuStepMessages(session)
-      ]);
-      return;
-    }
-
-    if (drink.soldOut) {
-      await savePendingSession(userId, session);
-      await replyMessage(replyToken, [
-        textMessage(`申し訳ありません、${drink.name}は売り切れです🙇‍♂️\n別のドリンクをお選びください。`),
-        buildDrinkFlexMessage()
-      ]);
-      return;
-    }
-
-    if (session.step === 'waiting_drink_menu' && session.currentSelection) {
-      session.currentSelection.drinkKey = `${DRINK_KEY_PREFIX}${drink.key}`;
-      session.currentSelection.drinkName = drink.name;
-      session.currentSelection.drinkPrice = Number(drink.price || 0);
-      transitionSession(session, 'waiting_qty');
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        textMessage(`ドリンク：${drink.name} を付けます。`),
-        buildQtyMessage(getCurrentSelectionLabel(session.currentSelection), 'food')
-      ]);
-      return;
-    }
-
-    session.currentSelection = {
-      itemType: 'drink',
-      menuKey: `${DRINK_KEY_PREFIX}${drink.key}`,
-      menuName: drink.name,
-      price: Number(drink.price || 0),
-      riceSize: '',
-      allowLargeRice: false,
-      drinkKey: '',
-      drinkName: '',
-      drinkPrice: 0
-    };
-
-    transitionSession(session, 'waiting_qty');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      textMessage(`ご注文商品：${drink.name}`),
-      buildQtyMessage(drink.name, 'drink')
-    ]);
-    return;
-  }
-
-  if (data.action === 'rice_size') {
-    if (!session.currentSelection) {
-      session.step = 'waiting_menu';
-      await savePendingSession(userId, session);
-      await replyMessage(replyToken, [
-        textMessage('もう一度商品を選んでください。'),
-        ...buildMenuStepMessages(session)
-      ]);
-      return;
-    }
-
-    const riceSize = normalizeRiceSizeLabel(data.value) || '普通';
-    session.currentSelection.riceSize = riceSize;
-
-    const riceLabel = `ご飯${riceSize}`;
-
-    if (canOfferDrinkForSelection(session.currentSelection)) {
-      transitionSession(session, 'waiting_drink_confirm');
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        textMessage(`${riceLabel}で承りました😊`),
-        buildDrinkConfirmMessage(session.currentSelection.menuName)
-      ]);
-      return;
-    }
-
-    transitionSession(session, 'waiting_qty');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      textMessage(`${riceLabel}で承りました😊`),
-      buildQtyMessage(
-        getCurrentSelectionLabel(session.currentSelection),
-        session.currentSelection.itemType || 'food'
-      )
-    ]);
-    return;
-  }
-
-  if (data.action === 'drink_confirm') {
-    if (!session.currentSelection) {
-      session.step = 'waiting_menu';
-      await savePendingSession(userId, session);
-      await replyMessage(replyToken, [
-        textMessage('もう一度商品を選んでください。'),
-        ...buildMenuStepMessages(session)
-      ]);
-      return;
-    }
-
-    if (data.value === 'yes') {
-      transitionSession(session, 'waiting_drink_menu');
-      await savePendingSession(userId, session);
-
-      await replyMessage(replyToken, [
-        withNavQuickReply(
-          textMessage('付けるドリンクを選んでください🥤'),
-          { includeBack: true, includeCancel: true }
-        ),
-        buildDrinkFlexMessage()
-      ]);
-      return;
-    }
-
-    session.currentSelection.drinkKey = '';
-    session.currentSelection.drinkName = '';
-    session.currentSelection.drinkPrice = 0;
-    transitionSession(session, 'waiting_qty');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      textMessage('ドリンクなしで承りました😊'),
-      buildQtyMessage(
-        getCurrentSelectionLabel(session.currentSelection),
-        session.currentSelection.itemType || 'food'
-      )
-    ]);
-    return;
-  }
-
-  if (data.action === 'qty') {
-    const qty = Number(data.value || 0);
-    await handleQtySelection(replyToken, userId, session, qty);
-    return;
-  }
-
-  if (data.action === 'add_more') {
-    transitionSession(session, 'waiting_menu');
-    await savePendingSession(userId, session);
-    await replyMessage(replyToken, buildMenuStepMessages(session));
-    return;
-  }
-
-  if (data.action === 'review_order') {
-    if (!session.items.length) {
-      await savePendingSession(userId, session);
-      await replyMessage(replyToken, [
-        textMessage('まだ商品が入っていません。'),
-        ...buildMenuStepMessages(session)
-      ]);
-      return;
-    }
-
-    transitionSession(session, 'waiting_date');
-    await savePendingSession(userId, session);
-
-    await replyMessage(replyToken, [
-      buildCartSummaryMessage(session),
-      createDateSelectMessage()
-    ]);
-    return;
-  }
-
-  if (data.action === 'confirm') {
-    if (!isReservationComplete(session)) {
-      await startLineLoading(userId, 5);
-      await beginReservationFlow(replyToken, userId);
-      return;
-    }
-
-    const reservation = {
-      reservationNo: createReservationNo(),
-      userId,
-      date: session.date,
-      time: session.time,
-      items: session.items.map((item) => ({ ...item })),
-      itemCount: session.items.length,
-      totalQty: getCartTotalQty(session.items),
-      total: getCartTotalAmount(session.items),
-      name: session.name,
-      phone: session.phone,
-      status: '受付済み',
-      createdAt: getJstDateTimeLabel()
-    };
-
-    const saveResult = await saveReservationToSheet(reservation);
-
-    if (!saveResult.ok) {
       await replyMessage(replyToken, [
         textMessage(
-          `予約内容の保存でエラーが起きました。\n${saveResult.error}`
+          `変更後の受取時間を選んでください。\n現在の受取日：${formatDateWithWeekday(session.date)}`
+        ),
+        buildTimeMessage(session.date)
+      ]);
+      return;
+    }
+
+    if (data.action === CHANGE_NAME_ACTION) {
+      transitionSession(session, 'change_waiting_name');
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [buildChangeNameInputMessage()]);
+      return;
+    }
+
+    if (data.action === CHANGE_PHONE_ACTION) {
+      transitionSession(session, 'change_waiting_phone');
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [buildChangePhoneInputMessage()]);
+      return;
+    }
+
+    if (data.action === CHANGE_ADD_ITEMS_ACTION) {
+      session.currentSelection = null;
+      transitionSession(session, 'waiting_menu');
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage('現在のご注文に商品を追加してください🍱'),
+        ...buildMenuStepMessages(session)
+      ]);
+      return;
+    }
+
+    if (data.action === CHANGE_ITEMS_ACTION) {
+      session.items = [];
+      session.currentSelection = null;
+      transitionSession(session, 'waiting_menu');
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage('変更後のメニューを選んでください🍱\nいまのメニュー内容は一度リセットされます。'),
+        ...buildMenuStepMessages(session)
+      ]);
+      return;
+    }
+
+    if (data.action === CHANGE_REVIEW_ACTION) {
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, [
+        buildChangeCurrentSummaryMessage(session),
+        buildChangeMenuMessage(session)
+      ]);
+      return;
+    }
+
+    if (data.action === CHANGE_CANCEL_REQUEST_ACTION) {
+      await replyMessage(replyToken, [
+        withNavQuickReply(
+          {
+            type: 'text',
+            text: 'この予約自体をキャンセルしますか？\n※この操作でご予約は取り消しになります。',
+            quickReply: {
+              items: [
+                quickPostbackItem(
+                  'はい、キャンセルする',
+                  `action=${CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION}`,
+                  'はい、キャンセルする'
+                )
+              ]
+            }
+          },
+          { includeBack: true, includeCancel: false }
         )
       ]);
       return;
     }
 
-    notifyStoreByLine(reservation).catch((err) =>
-      console.error('store line notify error:', err)
-    );
+    if (data.action === CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION) {
+      await handleReservationCancelConfirm(replyToken, userId, session);
+      return;
+    }
 
-    clearSession(userId);
-    await clearPendingSession(userId);
+    if (data.action === CHANGE_CONFIRM_ACTION) {
+      await handleReservationChangeConfirm(replyToken, userId, session);
+      return;
+    }
 
-    await replyMessage(replyToken, [
-      buildReservationCompleteMessage(reservation)
-    ]);
-    return;
+    if (data.action === 'pick_date') {
+      const selectedDate = event.postback?.params?.date || '';
+      await handleSelectedDate(replyToken, userId, session, selectedDate);
+      return;
+    }
+
+    if (data.action === 'time') {
+      const selectedTime = data.value || '';
+      const availableTimes = getAvailablePickupTimesForDate(session.date);
+
+      if (!availableTimes.includes(selectedTime)) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(
+            `受取時間をもう一度選んでください。\n本日は現在時刻の${SAME_DAY_LEAD_MINUTES}分後以降からご予約いただけます。`
+          ),
+          buildTimeMessage(session.date)
+        ]);
+        return;
+      }
+
+      if (session.flowType === 'change') {
+        transitionSession(session, 'change_menu', { time: selectedTime });
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`変更後の受取時間：${selectedTime}`),
+          buildChangeCurrentSummaryMessage(session),
+          buildChangeMenuMessage(session)
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'waiting_menu', { time: selectedTime });
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`受取時間：${selectedTime}`),
+        ...buildMenuStepMessages(session)
+      ]);
+      return;
+    }
+
+    if (data.action === 'menu') {
+      const menu = resolveMenuByKey(session, data.item || '');
+
+      if (!menu) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('メニューが見つかりませんでした。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      if (menu.visible === false) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(`申し訳ありません、${menu.name}は現在表示停止中です。`),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      if (menu.soldOut) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(`申し訳ありません、${menu.name}は売り切れです🙇‍♂️\n別の商品をお選びください。`),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      session.currentSelection = {
+        itemType: 'food',
+        menuKey: data.item,
+        menuName: menu.name,
+        price: Number(menu.price || 0),
+        riceSize: '',
+        allowLargeRice: !!menu.allowLargeRice,
+        drinkKey: '',
+        drinkName: '',
+        drinkPrice: 0
+      };
+
+      if (menu.allowLargeRice) {
+        transitionSession(session, 'waiting_rice_size');
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`ご注文商品：${menu.name}`),
+          buildLargeRiceMessage(menu.name)
+        ]);
+        return;
+      }
+
+      if (canOfferDrinkForSelection(session.currentSelection)) {
+        transitionSession(session, 'waiting_drink_confirm');
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`ご注文商品：${menu.name}`),
+          buildDrinkConfirmMessage(menu.name)
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'waiting_qty');
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`ご注文商品：${menu.name}`),
+        buildQtyMessage(menu.name, 'food')
+      ]);
+      return;
+    }
+
+    if (data.action === 'drink') {
+      const drink = resolveDrinkByKey(data.item || '');
+
+      if (!drink || drink.visible === false) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('ドリンクが見つかりませんでした。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      if (drink.soldOut) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(`申し訳ありません、${drink.name}は売り切れです🙇‍♂️\n別のドリンクをお選びください。`),
+          buildDrinkFlexMessage()
+        ]);
+        return;
+      }
+
+      if (session.step === 'waiting_drink_menu' && session.currentSelection) {
+        session.currentSelection.drinkKey = `${DRINK_KEY_PREFIX}${drink.key}`;
+        session.currentSelection.drinkName = drink.name;
+        session.currentSelection.drinkPrice = Number(drink.price || 0);
+        transitionSession(session, 'waiting_qty');
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`ドリンク：${drink.name} を付けます。`),
+          buildQtyMessage(getCurrentSelectionLabel(session.currentSelection), 'food')
+        ]);
+        return;
+      }
+
+      session.currentSelection = {
+        itemType: 'drink',
+        menuKey: `${DRINK_KEY_PREFIX}${drink.key}`,
+        menuName: drink.name,
+        price: Number(drink.price || 0),
+        riceSize: '',
+        allowLargeRice: false,
+        drinkKey: '',
+        drinkName: '',
+        drinkPrice: 0
+      };
+
+      transitionSession(session, 'waiting_qty');
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`ご注文商品：${drink.name}`),
+        buildQtyMessage(drink.name, 'drink')
+      ]);
+      return;
+    }
+
+    if (data.action === 'rice_size') {
+      if (!session.currentSelection) {
+        session.step = 'waiting_menu';
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('もう一度商品を選んでください。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      const riceSize = normalizeRiceSizeLabel(data.value) || '普通';
+      session.currentSelection.riceSize = riceSize;
+
+      const riceLabel = `ご飯${riceSize}`;
+
+      if (canOfferDrinkForSelection(session.currentSelection)) {
+        transitionSession(session, 'waiting_drink_confirm');
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          textMessage(`${riceLabel}で承りました😊`),
+          buildDrinkConfirmMessage(session.currentSelection.menuName)
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'waiting_qty');
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage(`${riceLabel}で承りました😊`),
+        buildQtyMessage(
+          getCurrentSelectionLabel(session.currentSelection),
+          session.currentSelection.itemType || 'food'
+        )
+      ]);
+      return;
+    }
+
+    if (data.action === 'drink_confirm') {
+      if (!session.currentSelection) {
+        session.step = 'waiting_menu';
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('もう一度商品を選んでください。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      if (data.value === 'yes') {
+        transitionSession(session, 'waiting_drink_menu');
+        await savePendingSession(userId, session);
+
+        await replyMessage(replyToken, [
+          withNavQuickReply(
+            textMessage('付けるドリンクを選んでください🥤'),
+            { includeBack: true, includeCancel: true }
+          ),
+          buildDrinkFlexMessage()
+        ]);
+        return;
+      }
+
+      session.currentSelection.drinkKey = '';
+      session.currentSelection.drinkName = '';
+      session.currentSelection.drinkPrice = 0;
+      transitionSession(session, 'waiting_qty');
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        textMessage('ドリンクなしで承りました😊'),
+        buildQtyMessage(
+          getCurrentSelectionLabel(session.currentSelection),
+          session.currentSelection.itemType || 'food'
+        )
+      ]);
+      return;
+    }
+
+    if (data.action === 'qty') {
+      const qty = Number(data.value || 0);
+      await handleQtySelection(replyToken, userId, session, qty);
+      return;
+    }
+
+    if (data.action === 'add_more') {
+      transitionSession(session, 'waiting_menu');
+      await savePendingSession(userId, session);
+      await replyMessage(replyToken, buildMenuStepMessages(session));
+      return;
+    }
+
+    if (data.action === 'review_order') {
+      if (!session.items.length) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage('まだ商品が入っていません。'),
+          ...buildMenuStepMessages(session)
+        ]);
+        return;
+      }
+
+      transitionSession(session, 'waiting_date');
+      await savePendingSession(userId, session);
+
+      await replyMessage(replyToken, [
+        buildCartSummaryMessage(session),
+        createDateSelectMessage()
+      ]);
+      return;
+    }
+
+    if (data.action === 'confirm') {
+      if (!isReservationComplete(session)) {
+        await startLineLoading(userId, 5);
+        await beginReservationFlow(replyToken, userId);
+        return;
+      }
+
+      const reservation = {
+        reservationNo: createReservationNo(),
+        userId,
+        date: session.date,
+        time: session.time,
+        items: session.items.map((item) => ({ ...item })),
+        itemCount: session.items.length,
+        totalQty: getCartTotalQty(session.items),
+        total: getCartTotalAmount(session.items),
+        name: session.name,
+        phone: session.phone,
+        status: '受付済み',
+        createdAt: getJstDateTimeLabel()
+      };
+
+      const saveResult = await saveReservationToSheet(reservation);
+
+      if (!saveResult.ok) {
+        await replyMessage(replyToken, [
+          textMessage(
+            `予約内容の保存でエラーが起きました。\n${saveResult.error}`
+          )
+        ]);
+        return;
+      }
+
+      notifyStoreByLine(reservation).catch((err) =>
+        console.error('store line notify error:', err)
+      );
+
+      clearSession(userId);
+      await clearPendingSession(userId);
+
+      await replyMessage(replyToken, [
+        buildReservationCompleteMessage(reservation)
+      ]);
+      return;
+    }
   }
 }
-}
+
 function buildReservationCompleteMessage(reservation) {
   return textMessage(
     `ご予約ありがとうございます✨\n\n` +
@@ -802,6 +1114,7 @@ function buildReservationCompleteMessage(reservation) {
       `ご来店をお待ちしています😊`
   );
 }
+
 async function notifyStoreByLine(reservation) {
   const notifyTo = getStoreNotifyTargetId();
   if (!notifyTo) return;
@@ -829,6 +1142,7 @@ async function notifyStoreByLine(reservation) {
     )
   ]);
 }
+
 async function startLineLoading(userId, loadingSeconds = 5) {
   const seconds = Math.max(5, Math.min(60, Number(loadingSeconds) || 5));
 
@@ -859,15 +1173,6 @@ async function startLineLoading(userId, loadingSeconds = 5) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function isStartTapLocked(userId) {
   const now = Date.now();
@@ -880,17 +1185,7 @@ function isStartTapLocked(userId) {
   startTapLocks.set(userId, now);
   return false;
 }
-function isStartTapLocked(userId) {
-  const now = Date.now();
-  const last = Number(startTapLocks.get(userId) || 0);
 
-  if (last && now - last < START_TAP_LOCK_MS) {
-    return true;
-  }
-
-  startTapLocks.set(userId, now);
-  return false;
-}
 function buildBusyNoticeText(kind = 'processing') {
   switch (kind) {
     case 'check':
@@ -937,14 +1232,14 @@ async function prepareReservationFlow(userId) {
   session.availableDates = availableDates;
   session.menuStatuses = menuStatuses;
   session.history = [];
-session.step = 'waiting_menu';
+  session.step = 'waiting_menu';
 
-await savePendingSession(userId, session);
+  await savePendingSession(userId, session);
 
-return {
-  ok: true,
-  messages: buildMenuStepMessages(session)
-};
+  return {
+    ok: true,
+    messages: buildMenuStepMessages(session)
+  };
 }
 
 async function beginReservationFlow(replyToken, userId) {
@@ -956,6 +1251,7 @@ async function pushBeginReservationFlow(userId) {
   const result = await prepareReservationFlow(userId);
   await pushMessage(userId, result.messages);
 }
+
 function createReservationStartMessage() {
   if (!LIFF_ID) {
     return withNavQuickReply(
@@ -1023,8 +1319,6 @@ function createDateSelectMessage() {
     { includeBack: true, includeCancel: true }
   );
 }
-
-
 function isYmdDate(text) {
   return /^\d{4}-\d{2}-\d{2}$/.test(normalizeYmdDate(text));
 }
