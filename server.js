@@ -2740,20 +2740,11 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   const normalizedDate = normalizeYmdDate(selectedDate);
   const normalizedTime = String(selectedTime || '').trim();
 
-  const bookingConfig = await fetchBookingConfig();
-  const menuStatuses = await fetchMenuStatusesConfig();
+  const availableDates = Array.isArray(currentSession.availableDates)
+    ? currentSession.availableDates
+    : [];
 
-  const rawAvailableDates =
-    bookingConfig.ok && Array.isArray(bookingConfig.dates)
-      ? bookingConfig.dates
-          .map((item) => normalizeYmdDate(item?.date))
-          .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-      : [];
-
-  const availableDates = buildEffectiveAvailableDates(rawAvailableDates);
-
-  if (!availableDates.includes(normalizedDate)) {
-    currentSession.availableDates = availableDates;
+  if (availableDates.length && !availableDates.includes(normalizedDate)) {
     currentSession.step = 'waiting_date';
     await savePendingSession(userId, currentSession);
     await replyMessage(replyToken, [
@@ -2767,8 +2758,6 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
 
   if (!availableTimes.includes(normalizedTime)) {
     currentSession.date = normalizedDate;
-    currentSession.availableDates = availableDates;
-    currentSession.menuStatuses = menuStatuses;
     currentSession.step = 'waiting_time';
     await savePendingSession(userId, currentSession);
     await replyMessage(replyToken, [
@@ -2779,22 +2768,10 @@ async function handleSelectedDateTime(replyToken, userId, session, selectedDate,
   }
 
   currentSession.flowType = 'new';
-  currentSession.availableDates = availableDates;
-  currentSession.menuStatuses = menuStatuses;
   currentSession.date = normalizedDate;
   currentSession.time = normalizedTime;
   currentSession.currentSelection = null;
   currentSession.step = 'waiting_name';
-
-  const menuResult = await fetchDailyMenu(normalizedDate);
-  currentSession.dailyMenu =
-    menuResult?.ok && menuResult.menu
-      ? {
-          ...DEFAULT_DAILY_MENU,
-          ...menuResult.menu,
-          allowLargeRice: menuResult.menu.allowLargeRice !== false
-        }
-      : { ...DEFAULT_DAILY_MENU };
 
   await savePendingSession(userId, currentSession);
 
