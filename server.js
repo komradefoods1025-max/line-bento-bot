@@ -615,7 +615,7 @@ if (session?.step === 'waiting_phone') {
     return;
   }
 
-  if (event.type === 'postback' && userId) {
+if (event.type === 'postback' && userId) {
   const data = parsePostbackData(event.postback?.data || '');
 
   if (data.action === 'reserve_start' || data.action === 'restart') {
