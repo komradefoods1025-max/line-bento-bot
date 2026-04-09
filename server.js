@@ -1155,7 +1155,6 @@ if (data.action === 'confirm') {
 }
   }
 }
-
 function buildReservationCompleteMessage(reservation) {
   return textMessage(
     `ご予約ありがとうございます✨\n\n` +
