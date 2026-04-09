@@ -19,7 +19,7 @@ const STORE_CODE = 'KMR';
 const TIME_ZONE = 'Asia/Tokyo';
 const BOOKABLE_DATE_COUNT = 31;
 const ORDER_START_DATE = '2026-04-02';
-const MENU_IMAGE_URL = 'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/04/%E3%83%89%E3%83%AA%E3%83%B3%E3%82%AF%E3%83%A1%E3%83%8B%E3%83%A5%E3%83%BC%E2%91%A1.pdf.png';
+const MENU_IMAGE_URL = 'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/04/%E3%83%89%E3%83%AA%E3%83%B3%E3%82%AF%E3%83%A1%E3%83%8B%E3%83%A5%E3%83%BC%E2%91%A1.pdf-1.png';
 
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
