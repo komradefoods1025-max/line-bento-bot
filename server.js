@@ -2229,14 +2229,23 @@ function getCartTotalAmount(items) {
 }
 
 function buildCartSummaryMessage(session) {
-  return textMessage(
-    `ご注文内容はこちらです。\n\n` +
-      `受取日：${formatDateWithWeekday(session.date)}\n` +
-      `受取時間：${session.time}\n` +
-      `ご注文内容：\n${formatOrderLines(session.items)}\n` +
-      `合計個数：${getCartTotalQty(session.items)}個\n` +
-      `注文合計：¥${getCartTotalAmount(session.items).toLocaleString('ja-JP')}`
+  const lines = ['ご注文内容はこちらです。', ''];
+
+  if (session?.date) {
+    lines.push(`受取日：${formatDateWithWeekday(session.date)}`);
+  }
+
+  if (session?.time) {
+    lines.push(`受取時間：${session.time}`);
+  }
+
+  lines.push(
+    `ご注文内容：\n${formatOrderLines(session.items)}`,
+    `合計個数：${getCartTotalQty(session.items)}個`,
+    `注文合計：¥${getCartTotalAmount(session.items).toLocaleString('ja-JP')}`
   );
+
+  return textMessage(lines.join('\n'));
 }
 
 function buildConfirmMessage(session) {
@@ -2727,54 +2736,13 @@ async function handleCancelAction(replyToken, userId) {
 }
 
 async function handleSelectedDateTime(replyToken, userId, session, selectedDate, selectedTime) {
-  const date = String(selectedDate || '').trim();
-  const time = String(selectedTime || '').trim();
-
-  if (!date || !time) {
-    await replyMessage(replyToken, [
-      {
-        type: 'text',
-        text: '日時の取得に失敗しました。お手数ですが、もう一度お試しください。'
-      }
-    ]);
-    return;
-  }
-
-  const nextSession = {
-    ...(session || {}),
-    items: Array.isArray(session?.items) ? session.items : [],
-    currentSelection: null,
-    pickupDate: date,
-    pickupTime: time,
-    reservationDate: date,
-    reservationTime: time,
-    date,
-    time,
-    status: 'waiting_name',
-    step: 'waiting_name',
-    updatedAt: new Date().toISOString()
-  };
-
-  await savePendingSession(userId, nextSession);
-
-  const pickupLabel = formatPickupDateTimeForDisplay(date, time);
-
-  await replyMessage(replyToken, [
-    {
-      type: 'text',
-      text:
-        `受取日時は ${pickupLabel} です。
-
-` +
-        `続いて、ご予約名を入力してください。`
-    }
-  ]);
-}
-async function handleSelectedDate(replyToken, userId, session, selectedDate) {
   const currentSession = session || getSession(userId);
   const normalizedDate = normalizeYmdDate(selectedDate);
+  const normalizedTime = String(selectedTime || '').trim();
 
   const bookingConfig = await fetchBookingConfig();
+  const menuStatuses = await fetchMenuStatusesConfig();
+
   const rawAvailableDates =
     bookingConfig.ok && Array.isArray(bookingConfig.dates)
       ? bookingConfig.dates
@@ -2786,38 +2754,54 @@ async function handleSelectedDate(replyToken, userId, session, selectedDate) {
 
   if (!availableDates.includes(normalizedDate)) {
     currentSession.availableDates = availableDates;
-    currentSession.step = currentSession.flowType === 'change' ? 'change_waiting_date' : 'waiting_date';
+    currentSession.step = 'waiting_date';
     await savePendingSession(userId, currentSession);
     await replyMessage(replyToken, [
-      textMessage('その日は現在選択できません。もう一度お選びください。'),
+      textMessage('選択された日付は現在ご利用いただけません。もう一度お選びください。'),
       createDateSelectMessage()
     ]);
     return;
   }
 
-  currentSession.availableDates = availableDates;
-  currentSession.date = normalizedDate;
+  const availableTimes = getAvailablePickupTimesForDate(normalizedDate);
 
-  const menuStatuses = await fetchMenuStatusesConfig();
-  currentSession.menuStatuses = menuStatuses;
-
-  const menuResult = await fetchDailyMenu(normalizedDate);
-  currentSession.dailyMenu = menuResult?.ok && menuResult.menu
-    ? {
-        ...DEFAULT_DAILY_MENU,
-        ...menuResult.menu,
-        allowLargeRice: menuResult.menu.allowLargeRice !== false
-      }
-    : { ...DEFAULT_DAILY_MENU };
-
-  if (currentSession.flowType === 'change') {
-    transitionSession(currentSession, 'change_waiting_time', { date: normalizedDate });
-  } else {
-    transitionSession(currentSession, 'waiting_time', { date: normalizedDate });
+  if (!availableTimes.includes(normalizedTime)) {
+    currentSession.date = normalizedDate;
+    currentSession.availableDates = availableDates;
+    currentSession.menuStatuses = menuStatuses;
+    currentSession.step = 'waiting_time';
+    await savePendingSession(userId, currentSession);
+    await replyMessage(replyToken, [
+      textMessage('その時間は選べません。もう一度お選びください。'),
+      buildTimeMessage(normalizedDate)
+    ]);
+    return;
   }
 
+  currentSession.flowType = 'new';
+  currentSession.availableDates = availableDates;
+  currentSession.menuStatuses = menuStatuses;
+  currentSession.date = normalizedDate;
+  currentSession.time = normalizedTime;
+  currentSession.currentSelection = null;
+  currentSession.step = 'waiting_name';
+
+  const menuResult = await fetchDailyMenu(normalizedDate);
+  currentSession.dailyMenu =
+    menuResult?.ok && menuResult.menu
+      ? {
+          ...DEFAULT_DAILY_MENU,
+          ...menuResult.menu,
+          allowLargeRice: menuResult.menu.allowLargeRice !== false
+        }
+      : { ...DEFAULT_DAILY_MENU };
+
   await savePendingSession(userId, currentSession);
-  await replyMessage(replyToken, [buildTimeMessage(normalizedDate)]);
+
+  await replyMessage(replyToken, [
+    buildCartSummaryMessage(currentSession),
+    buildNameInputMessage()
+  ]);
 }
 
 async function handleSelectedTime(replyToken, userId, session, selectedTime) {
