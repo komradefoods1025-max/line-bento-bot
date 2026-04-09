@@ -1930,7 +1930,7 @@ function buildQtyMessage(name, itemType = 'food') {
           ? `${name} の本数を選んでください。`
           : `${name} の個数を選んでください。`,
       quickReply: {
-        items: [1, 2, 3, 4, 5].map((qty) =>
+        items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((qty) =>
           quickPostbackItem(`${qty}`, `action=qty&value=${qty}`, `${qty}`)
         )
       }
