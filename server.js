@@ -1058,24 +1058,24 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'review_order') {
-      if (!session.items.length) {
-        await savePendingSession(userId, session);
-        await replyMessage(replyToken, [
-          textMessage('まだ商品が入っていません。'),
-          ...buildMenuStepMessages(session)
-        ]);
-        return;
-      }
+  if (!session.items.length) {
+    await savePendingSession(userId, session);
+    await replyMessage(replyToken, [
+      textMessage('まだ商品が入っていません。'),
+      ...buildMenuStepMessages(session)
+    ]);
+    return;
+  }
 
-      transitionSession(session, 'waiting_name');
-      await savePendingSession(userId, session);
+  transitionSession(session, 'waiting_date');
+  await savePendingSession(userId, session);
 
-      await replyMessage(replyToken, [
-        buildCartSummaryMessage(session),
-        buildNameInputMessage()
-      ]);
-      return;
-    }
+  await replyMessage(replyToken, [
+    buildCartSummaryMessage(session),
+    createDateSelectMessage()
+  ]);
+  return;
+}
 
     if (data.action === 'confirm') {
       if (!isReservationComplete(session)) {
