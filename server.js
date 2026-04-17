@@ -23,7 +23,7 @@ const MENU_IMAGE_URL = 'https://komradefoods1025-geskw.wpcomstaging.com/wp-conte
 
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
 const REMINDER_CRON_TOKEN = process.env.REMINDER_CRON_TOKEN || '';
-const SAME_DAY_LEAD_MINUTES = Number(process.env.SAME_DAY_LEAD_MINUTES || 30);
+const SAME_DAY_LEAD_MINUTES = Number(process.env.SAME_DAY_LEAD_MINUTES || 10);
 const CHANGE_LIMIT_MINUTES = 30;
 
 const BACK_ACTION = 'go_back';
