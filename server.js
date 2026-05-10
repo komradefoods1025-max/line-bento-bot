@@ -103,35 +103,72 @@ const MENUS = {
     price: 700,
     description: 'ジューシーな唐揚げが人気の定番弁当',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e59490e68f9ae38192.jpeg',
-    allowLargeRice: true
-  },
-  shogayaki: {
-    name: '生姜焼き弁当',
-    price: 700,
-    description: '香ばしく焼き上げたごはんが進む一品',
-    imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/5.png',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/5.png',
     allowLargeRice: true
   },
   chicken_nanban: {
     name: 'チキン南蛮弁当',
     price: 900,
-    description: 'オリジナルタルタルが美味な至極の一品',
+    description: '特製タルタルが楽しめる人気のチキン南蛮弁当',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/3.png',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/3.png',
     allowLargeRice: true
-  }
-};
-
-const EXTRA_MENUS = {
-  [EXTRA_KARAAGE_KEY]: {
-    name: '追加唐揚げ',
-    price: 80,
-    description: 'お弁当に追加できる唐揚げです（1個80円）',
+  },
+  shogayaki: {
+    name: '生姜焼き弁当',
+    price: 700,
+    description: 'ご飯が進む定番の生姜焼き弁当',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg',
-    allowLargeRice: false
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/6.png',
+    allowLargeRice: true
+  },
+  original_hamburg: {
+    name: 'オリジナルハンバーグ弁当',
+    price: 900,
+    description: 'ふっくらジューシーな自家製ハンバーグ弁当',
+    imageUrl:
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/9.png',
+    allowLargeRice: true
+  },
+  cheese_hamburg: {
+    name: 'チーズハンバーグ弁当',
+    price: 1000,
+    description: 'とろけるチーズが相性抜群のハンバーグ弁当',
+    imageUrl:
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/4.png',
+    allowLargeRice: true
+  },
+  oroshi_ponzu_hamburg: {
+    name: 'おろしポン酢ハンバーグ弁当',
+    price: 1000,
+    description: 'さっぱり食べられるおろしポン酢ハンバーグ弁当',
+    imageUrl:
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/2.png',
+    allowLargeRice: true
+  },
+  demi_hamburg: {
+    name: 'デミグラスソースハンバーグ弁当',
+    price: 1000,
+    description: 'コクのあるデミグラスソースが決め手のハンバーグ弁当',
+    imageUrl:
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/1.png',
+    allowLargeRice: true
+  },
+  chicken_katsu: {
+    name: 'チキンカツ弁当',
+    price: 900,
+    description: 'サクッとした食感が楽しめるチキンカツ弁当',
+    imageUrl:
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/8.png',
+    allowLargeRice: true
+  },
+  chicken_katsu_tartar: {
+    name: 'チキンカツ弁当　タルタルソースがけ',
+    price: 1000,
+    description: 'タルタルソースたっぷりのチキンカツ弁当',
+    imageUrl:
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/7.png',
+    allowLargeRice: true
   }
 };
 
