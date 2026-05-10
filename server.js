@@ -667,21 +667,20 @@ async function handleEvent(event) {
     }
 
     if (data.action === 'start_order_from_menu_image') {
-      if (isStartTapLocked(userId)) {
-        return;
-      }
+  if (isStartTapLocked(userId)) {
+    return;
+  }
 
-      if (hasActiveSession(session)) {
-        await clearPendingSession(userId);
-        clearSession(userId);
-      }
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
 
-      await startLineLoading(userId, 10);
-      await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-      await sleep(1200);
-      await pushBeginReservationFlow(userId);
-      return;
-    }
+  await startLineLoading(userId, 10);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
 
     if (data.action === 'begin_change') {
       await beginReservationChangeFlow(replyToken, userId);
