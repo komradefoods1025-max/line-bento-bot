@@ -1716,7 +1716,7 @@ function buildMenuBubble(itemKey, menu) {
     },
     {
       type: 'text',
-      text: `¥${Number(menu.price).toLocaleString('ja-JP')}`,
+      text: `¥${Number(menu.price || 0).toLocaleString('ja-JP')}`,
       weight: 'bold',
       size: 'md',
       color: '#16A34A'
@@ -1753,23 +1753,11 @@ function buildMenuBubble(itemKey, menu) {
 
   return {
     type: 'bubble',
-    hero: {
-      type: 'image',
-      url: menu.imageUrl,
-      size: 'full',
-      aspectRatio: '20:13',
-      aspectMode: 'cover',
-      action: {
-        type: 'postback',
-        label: buttonLabel,
-        data: `action=menu&item=${encodeURIComponent(itemKey)}`,
-        displayText
-      }
-    },
     body: {
       type: 'box',
       layout: 'vertical',
       spacing: 'sm',
+      paddingAll: '16px',
       contents: bodyContents
     },
     footer: {
