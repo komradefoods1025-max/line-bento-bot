@@ -456,21 +456,20 @@ async function handleEvent(event) {
     }
 
     if (isStartReservationText(text) || isResetText(text)) {
-      if (isStartTapLocked(userId)) {
-        return;
-      }
+  if (isStartTapLocked(userId)) {
+    return;
+  }
 
-      if (hasActiveSession(session)) {
-        await clearPendingSession(userId);
-        clearSession(userId);
-      }
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
 
-      await startLineLoading(userId, 10);
-      await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-      await sleep(1200);
-      await pushBeginReservationFlow(userId);
-      return;
-    }
+  await startLineLoading(userId, 10);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
 
     if (text.includes('予約日時|')) {
       console.log(`[LIFF ROUTE HIT ${APP_VERSION}]`, JSON.stringify(text));
