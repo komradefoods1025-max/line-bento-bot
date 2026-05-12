@@ -1767,6 +1767,19 @@ function buildMenuBubble(itemKey, menu) {
 
   return {
     type: 'bubble',
+    hero: {
+      type: 'image',
+      url: menu.imageUrl,
+      size: 'full',
+      aspectRatio: '20:13',
+      aspectMode: 'cover',
+      action: {
+        type: 'postback',
+        label: buttonLabel,
+        data: `action=menu&item=${encodeURIComponent(itemKey)}`,
+        displayText
+      }
+    },
     body: {
       type: 'box',
       layout: 'vertical',
@@ -1793,7 +1806,6 @@ function buildMenuBubble(itemKey, menu) {
     }
   };
 }
-
 function buildDrinkBubble(drink) {
   const isSoldOut = drink?.soldOut === true;
 
@@ -1905,7 +1917,7 @@ function buildMenuFlexMessages(session) {
     }
   });
 
-  const chunkSize = 4;
+  const chunkSize = 3;
   const messages = [];
 
   for (let i = 0; i < bubbles.length; i += chunkSize) {
