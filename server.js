@@ -654,16 +654,20 @@ async function handleEvent(event) {
     const data = parsePostbackData(event.postback?.data || '');
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
-      if (isStartTapLocked(userId)) {
-        return;
-      }
+  if (isStartTapLocked(userId)) {
+    return;
+  }
 
-      await startLineLoading(userId, 10);
-      await replyMessage(replyToken, [buildBusyNoticeText('processing')]);
-      await sleep(1500);
-      await pushBeginReservationFlow(userId);
-      return;
-    }
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
+
+  await startLineLoading(userId, 10);
+  await sleep(1200);
+  await beginReservationFlow(replyToken, userId);
+  return;
+}
 
     if (data.action === 'start_order_from_menu_image') {
   if (isStartTapLocked(userId)) {
