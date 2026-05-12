@@ -124,7 +124,7 @@ const MENUS = {
   },
   original_hamburg: {
     name: 'オリジナルハンバーグ弁当',
-    price: 900,
+    price: 850,
     description: 'ふっくらジューシーな自家製ハンバーグ弁当',
     imageUrl:
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/9.png',
@@ -132,7 +132,7 @@ const MENUS = {
   },
   cheese_hamburg: {
     name: 'チーズハンバーグ弁当',
-    price: 1000,
+    price: 850,
     description: 'とろけるチーズが相性抜群のハンバーグ弁当',
     imageUrl:
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/4.png',
@@ -140,7 +140,7 @@ const MENUS = {
   },
   oroshi_ponzu_hamburg: {
     name: 'おろしポン酢ハンバーグ弁当',
-    price: 1000,
+    price: 850,
     description: 'さっぱり食べられるおろしポン酢ハンバーグ弁当',
     imageUrl:
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/2.png',
@@ -148,7 +148,7 @@ const MENUS = {
   },
   demi_hamburg: {
     name: 'デミグラスソースハンバーグ弁当',
-    price: 1000,
+    price: 850,
     description: 'コクのあるデミグラスソースが決め手のハンバーグ弁当',
     imageUrl:
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/1.png',
@@ -156,7 +156,7 @@ const MENUS = {
   },
   chicken_katsu: {
     name: 'チキンカツ弁当',
-    price: 900,
+    price: 700,
     description: 'サクッとした食感が楽しめるチキンカツ弁当',
     imageUrl:
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/8.png',
@@ -164,7 +164,7 @@ const MENUS = {
   },
   chicken_katsu_tartar: {
     name: 'チキンカツ弁当　タルタルソースがけ',
-    price: 1000,
+    price: 750,
     description: 'タルタルソースたっぷりのチキンカツ弁当',
     imageUrl:
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/7.png',
