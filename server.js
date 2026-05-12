@@ -159,7 +159,7 @@ const MENUS = {
     price: 700,
     description: 'サクッとした食感が楽しめるチキンカツ弁当',
     imageUrl:
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/チキンカツ弁当.png',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/%E3%83%81%E3%82%AD%E3%83%B3%E3%82%AB%E3%83%84%E5%BC%81%E5%BD%93.png',
     allowLargeRice: true
   },
   chicken_katsu_tartar: {
@@ -177,7 +177,7 @@ const EXTRA_MENUS = {
     price: 80,
     description: 'お弁当に追加できる唐揚げです（1個80円）',
     imageUrl:
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/04/SCN_20260409_2239.pdf.jpg',
     allowLargeRice: false,
     soldOut: false,
     visible: true
