@@ -159,7 +159,7 @@ const MENUS = {
     price: 700,
     description: 'サクッとした食感が楽しめるチキンカツ弁当',
     imageUrl:
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/8.png',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/チキンカツ弁当.png',
     allowLargeRice: true
   },
   chicken_katsu_tartar: {
