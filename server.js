@@ -1867,14 +1867,18 @@ function buildDrinkBubble(drink) {
   };
 }
 
-function buildMenuFlexMessage(session) {
+function buildMenuFlexMessage(session, bubbles) {
+  return {
+    type: 'flex',
+    altText: 'メニュー一覧',
+    contents: {
+      type: 'carousel',
+      contents: bubbles
+    }
+  };
+}
+function buildMenuFlexMessages(session) {
   const bubbles = [];
-
-  // 日替わりは一時的に非表示
-  // const dailyMenu = resolveMenuByKey(session, DAILY_MENU_KEY);
-  // if (dailyMenu && dailyMenu.visible !== false) {
-  //   bubbles.push(buildMenuBubble(DAILY_MENU_KEY, dailyMenu));
-  // }
 
   Object.entries(MENUS).forEach(([key]) => {
     const menu = resolveMenuByKey(session, key);
@@ -1890,16 +1894,15 @@ function buildMenuFlexMessage(session) {
     }
   });
 
-  return {
-    type: 'flex',
-    altText: 'メニュー一覧',
-    contents: {
-      type: 'carousel',
-      contents: bubbles
-    }
-  };
-}
+  const chunkSize = 4;
+  const messages = [];
 
+  for (let i = 0; i < bubbles.length; i += chunkSize) {
+    messages.push(buildMenuFlexMessage(session, bubbles.slice(i, i + chunkSize)));
+  }
+
+  return messages;
+}
 function buildDrinkFlexMessage() {
   const contents = DRINK_OPTIONS
     .filter((drink) => drink.visible !== false)
@@ -2018,7 +2021,7 @@ function buildMenuStepMessages(session) {
       textMessage('ご希望の商品を選んでください🍱'),
       { includeBack: true, includeCancel: true }
     ),
-    buildMenuFlexMessage(session)
+    ...buildMenuFlexMessages(session)
   ];
 }
 
