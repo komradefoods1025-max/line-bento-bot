@@ -171,7 +171,18 @@ const MENUS = {
     allowLargeRice: true
   }
 };
-
+const EXTRA_MENUS = {
+  [EXTRA_KARAAGE_KEY]: {
+    name: '追加唐揚げ',
+    price: 80,
+    description: 'お弁当に追加できる唐揚げです（1個80円）',
+    imageUrl:
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/03/photo_2026-03-22_14-58-55.jpg',
+    allowLargeRice: false,
+    soldOut: false,
+    visible: true
+  }
+};
 const PICKUP_TIMES = [
   '11:30',
   '11:45',
