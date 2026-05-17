@@ -52,7 +52,7 @@ const DRINK_OPTIONS = [
     price: 150,
     description: 'すっきり飲みやすいミネラルウォーター',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e6b0b4-1.jpg',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/いろはす.png',
     soldOut: false,
     visible: true
   },
@@ -62,7 +62,7 @@ const DRINK_OPTIONS = [
     price: 200,
     description: '食事と相性のいい定番ドリンク',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/518rlhbonql.jpg',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/やかんの麦茶.png',
     soldOut: false,
     visible: true
   },
@@ -72,7 +72,7 @@ const DRINK_OPTIONS = [
     price: 200,
     description: 'シュワッと爽快な人気ドリンク',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e382b3e383bce383a9-1.jpg',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/コカ・コーラ.png',
     soldOut: true,
     visible: true
   },
@@ -82,7 +82,7 @@ const DRINK_OPTIONS = [
     price: 200,
     description: 'ゼロシュガーゼロカロリー',
     imageUrl:
-      'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/mono62457659-240314-02.jpg',
+      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/コカ・コーラゼロ.png',
     soldOut: false,
     visible: true
   }
