@@ -297,6 +297,10 @@ app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
 
   try {
     for (const event of events) {
+
+  console.log("USER ID:", event.source.userId);
+
+  if (event.type !== "message") continue;
       await handleEvent(event);
     }
     return res.sendStatus(200);
