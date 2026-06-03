@@ -1687,9 +1687,7 @@ function resolveMenuByKey(session, itemKey) {
 }
 
 function canOfferDrinkForSelection(selection) {
-  if (!selection) return false;
-  if (selection.itemType !== 'food') return false;
-  return !String(selection.menuKey || '').startsWith(DRINK_KEY_PREFIX);
+  return false;
 }
 
 function getCurrentSelectionLabel(selection) {
