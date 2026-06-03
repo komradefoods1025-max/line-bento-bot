@@ -276,36 +276,26 @@ app.get('/tasks/remind-pending', async (req, res) => {
   }
 });
 
-app.post('/webhook', express.raw({ type: '*/*' }), async (req, res) => {
-  const rawBody = req.body instanceof Buffer ? req.body : Buffer.from('');
-  const signature = req.get('x-line-signature') || '';
-
-  if (!verifySignature(rawBody, signature, CHANNEL_SECRET)) {
-    return res.sendStatus(401);
-  }
-
-  let body;
+app.post("/webhook", async (req, res) => {
   try {
-    body = JSON.parse(rawBody.toString('utf8'));
-  } catch (err) {
-    console.error('JSON parse error:', err);
-    return res.sendStatus(400);
-  }
+    const events = req.body.events || [];
 
-  const events = Array.isArray(body.events) ? body.events : [];
+    console.log("EVENTS:", JSON.stringify(events));
 
-  try {
     for (const event of events) {
 
-  console.log("USER ID:", event.source.userId);
+      console.log("USER ID:", event.source?.userId);
 
-  if (event.type !== "message") continue;
-      await handleEvent(event);
+      if (event.type !== "message") continue;
+
+      console.log("incoming text:", event.message?.text);
     }
-    return res.sendStatus(200);
+
+    res.sendStatus(200);
+
   } catch (err) {
-    console.error('handleEvent error:', err);
-    return res.sendStatus(500);
+    console.error(err);
+    res.sendStatus(500);
   }
 });
 function normalizeActionToken(value) {
