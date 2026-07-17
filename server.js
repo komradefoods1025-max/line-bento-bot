@@ -161,12 +161,21 @@ const MENUS = {
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/%E3%83%81%E3%82%AD%E3%83%B3%E3%82%AB%E3%83%84%E5%BC%81%E5%BD%93.png',
     allowLargeRice: true
   },
-  chicken_katsu_tartar: {
+    chicken_katsu_tartar: {
     name: 'チキンカツ弁当　タルタルソースがけ',
     price: 750,
     description: 'タルタルソースたっぷりのチキンカツ弁当',
     imageUrl:
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/7.png',
+    allowLargeRice: true
+  },
+
+  chicken_katsu_oroshi_ponzu: {
+    name: 'チキンカツ おろしポン酢弁当',
+    price: 750,
+    description: 'さっぱりとしたおろしポン酢で楽しむチキンカツ弁当',
+    imageUrl:
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/%E3%83%81%E3%82%AD%E3%83%B3%E3%82%AB%E3%83%84%E3%81%8A%E3%82%8D%E3%81%97%E3%83%9D%E3%83%B3%E9%85%A2%EF%BC%BF%E3%83%90%E3%83%A9%E3%83%B3.png',
     allowLargeRice: true
   }
 };
