@@ -11,7 +11,7 @@ const RESERVATION_SAVE_URL = process.env.RESERVATION_SAVE_URL || '';
 const STORE_NOTIFY_LINE_ID = process.env.STORE_NOTIFY_LINE_ID || '';
 const STORE_NOTIFY_GROUP_ID = process.env.STORE_NOTIFY_GROUP_ID || '';
 const LIFF_ID = process.env.LIFF_ID || '';
-const APP_VERSION = '2026-04-04-group-notify-01';
+const APP_VERSION = '2026-08-07-phone-link-02';
 
 const STORE_NAME = 'かむらど';
 const STORE_CODE = 'KMR';
@@ -40,6 +40,8 @@ const CHANGE_ITEMS_ACTION = 'change_items';
 const CHANGE_ADD_ITEMS_ACTION = 'change_add_items';
 const CHANGE_CANCEL_REQUEST_ACTION = 'change_cancel_request';
 const CHANGE_CANCEL_CONFIRM_RESERVATION_ACTION = 'change_cancel_confirm_reservation';
+const VIEW_RESERVATION_DETAIL_ACTION = 'view_reservation_detail';
+const SELECT_CHANGE_RESERVATION_ACTION = 'select_change_reservation';
 const DAILY_MENU_KEY = 'daily_menu';
 const EXTRA_KARAAGE_KEY = 'extra_karaage';
 const DRINK_KEY_PREFIX = 'drink_';
@@ -161,7 +163,7 @@ const MENUS = {
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/%E3%83%81%E3%82%AD%E3%83%B3%E3%82%AB%E3%83%84%E5%BC%81%E5%BD%93.png',
     allowLargeRice: true
   },
-    chicken_katsu_tartar: {
+  chicken_katsu_tartar: {
     name: 'チキンカツ弁当　タルタルソースがけ',
     price: 750,
     description: 'タルタルソースたっぷりのチキンカツ弁当',
@@ -169,7 +171,6 @@ const MENUS = {
       'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/7.png',
     allowLargeRice: true
   },
-
   chicken_katsu_oroshi_ponzu: {
     name: 'チキンカツ おろしポン酢弁当',
     price: 750,
@@ -602,6 +603,35 @@ async function handleEvent(event) {
       return;
     }
 
+    if (session?.step === 'waiting_reservation_lookup_phone') {
+      const phone = normalizePhone(text);
+
+      if (!isValidPhone(phone)) {
+        await savePendingSession(userId, session);
+        await replyMessage(replyToken, [
+          textMessage(
+            '電話番号の形式が正しくありません。\n国内の電話番号を入力してください。\n例：09012345678 または 0312345678'
+          ),
+          buildReservationLookupPhoneMessage()
+        ]);
+        return;
+      }
+
+      const lookupMode = session.flowType === 'lookup_change'
+        ? 'change'
+        : 'view';
+
+      clearSession(userId);
+      await clearPendingSession(userId);
+
+      if (lookupMode === 'change') {
+        await beginReservationChangeFlow(replyToken, userId, '', phone);
+      } else {
+        await handleViewLatestReservation(replyToken, userId, phone);
+      }
+      return;
+    }
+
     if (session?.step === 'waiting_phone') {
       const phone = normalizePhone(text);
 
@@ -675,6 +705,51 @@ async function handleEvent(event) {
 
   if (event.type === 'postback' && userId) {
     const data = parsePostbackData(event.postback?.data || '');
+
+    if (data.action === VIEW_RESERVATION_DETAIL_ACTION) {
+      const result = await fetchReservations(userId);
+
+      if (!result.ok) {
+        await replyMessage(replyToken, [
+          textMessage(
+            `予約内容の取得でエラーが起きました。\n${result.error || 'unknown error'}`
+          )
+        ]);
+        return;
+      }
+
+      const reservation = findReservationByNo(
+        result.reservations,
+        data.reservationNo
+      );
+
+      if (!reservation) {
+        await replyMessage(replyToken, [
+          textMessage(
+            '選択された予約が見つかりませんでした。\nもう一度「予約確認」からお試しください。'
+          )
+        ]);
+        return;
+      }
+
+      await replyMessage(replyToken, [
+        buildLatestReservationMessage(reservation),
+        buildReservationDetailActionsMessage(reservation)
+      ]);
+      return;
+    }
+
+    if (data.action === SELECT_CHANGE_RESERVATION_ACTION) {
+      await startLineLoading(userId, 5);
+      await sleep(700);
+
+      await beginReservationChangeFlow(
+        replyToken,
+        userId,
+        data.reservationNo || ''
+      );
+      return;
+    }
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
   if (isStartTapLocked(userId)) {
@@ -2641,7 +2716,10 @@ async function savePendingSession(userId, session) {
         dailyMenu: session.dailyMenu,
         menuStatuses: session.menuStatuses,
         availableDates: session.availableDates,
-        availableDateOptions: session.availableDateOptions
+        availableDateOptions: session.availableDateOptions,
+        latestReservation: session.latestReservation || null,
+        latestReservationNo: session.latestReservationNo || '',
+        editingReservationUserId: session.editingReservationUserId || ''
       })
     });
   } catch (err) {
@@ -2672,6 +2750,9 @@ function restoreSessionFromPending(pending) {
   session.history = Array.isArray(payload.history) ? payload.history : [];
   session.dailyMenu = payload.dailyMenu || { ...DEFAULT_DAILY_MENU };
   session.menuStatuses = payload.menuStatuses || {};
+  session.latestReservation = payload.latestReservation || null;
+  session.latestReservationNo = payload.latestReservationNo || '';
+  session.editingReservationUserId = payload.editingReservationUserId || '';
   session.availableDates = Array.isArray(payload.availableDates) ? payload.availableDates : [];
   session.availableDateOptions = Array.isArray(payload.availableDateOptions)
     ? payload.availableDateOptions
@@ -3184,48 +3265,344 @@ function buildLatestReservationMessage(reservation) {
   );
 }
 
-async function handleViewLatestReservation(replyToken, userId) {
-  const result = await fetchLatestReservation(userId);
+function getReservationSourceLabel(reservation) {
+  const source = String(
+    reservation?.source ||
+    reservation?.orderSource ||
+    ''
+  ).toUpperCase();
+
+  return source === 'WEB' ? 'Web予約' : 'LINE予約';
+}
+
+function getReservationShortOrderText(reservation) {
+  const items = Array.isArray(reservation?.items)
+    ? reservation.items
+    : [];
+
+  if (!items.length) {
+    return reservation?.orderLines
+      ? String(reservation.orderLines).split('\n')[0]
+      : '注文内容あり';
+  }
+
+  const firstItem = items[0];
+  const firstName =
+    firstItem?.menuName ||
+    firstItem?.name ||
+    '商品';
+  const firstQty = Number(firstItem?.qty || 0);
+  const additionalCount = Math.max(items.length - 1, 0);
+
+  return additionalCount > 0
+    ? `${firstName} ×${firstQty}ほか${additionalCount}種類`
+    : `${firstName} ×${firstQty}`;
+}
+
+function buildReservationListFlexMessage(reservations, mode = 'view') {
+  const rows = Array.isArray(reservations) ? reservations : [];
+
+  const bubbles = rows.slice(0, 10).map((reservation, index) => {
+    const isChangeMode = mode === 'change';
+    const action = isChangeMode
+      ? SELECT_CHANGE_RESERVATION_ACTION
+      : VIEW_RESERVATION_DETAIL_ACTION;
+
+    return {
+      type: 'bubble',
+      size: 'kilo',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'md',
+        paddingAll: '18px',
+        contents: [
+          {
+            type: 'text',
+            text: `${index + 1}件目の予約`,
+            weight: 'bold',
+            size: 'lg',
+            color: '#1F2937'
+          },
+          {
+            type: 'text',
+            text: getReservationSourceLabel(reservation),
+            size: 'sm',
+            weight: 'bold',
+            color:
+              String(reservation?.source).toUpperCase() === 'WEB'
+                ? '#2563EB'
+                : '#16A34A'
+          },
+          { type: 'separator' },
+          {
+            type: 'box',
+            layout: 'vertical',
+            spacing: 'sm',
+            contents: [
+              {
+                type: 'text',
+                text: `受取日：${
+                  reservation?.date
+                    ? formatDateWithWeekday(reservation.date)
+                    : '-'
+                }`,
+                size: 'sm',
+                wrap: true
+              },
+              {
+                type: 'text',
+                text: `受取時間：${reservation?.time || '-'}`,
+                size: 'sm'
+              },
+              {
+                type: 'text',
+                text: `受付番号：${reservation?.reservationNo || '-'}`,
+                size: 'xs',
+                color: '#666666',
+                wrap: true
+              },
+              {
+                type: 'text',
+                text: getReservationShortOrderText(reservation),
+                size: 'sm',
+                wrap: true
+              },
+              {
+                type: 'text',
+                text: `合計：¥${Number(
+                  reservation?.total || 0
+                ).toLocaleString('ja-JP')}`,
+                size: 'md',
+                weight: 'bold'
+              }
+            ]
+          }
+        ]
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'button',
+            style: 'primary',
+            action: {
+              type: 'postback',
+              label: isChangeMode ? 'この予約を変更' : '予約内容を確認',
+              data:
+                `action=${action}` +
+                `&reservationNo=${encodeURIComponent(
+                  reservation.reservationNo
+                )}`,
+              displayText: isChangeMode
+                ? `${index + 1}件目の予約を変更`
+                : `${index + 1}件目の予約を確認`
+            }
+          }
+        ]
+      }
+    };
+  });
+
+  return {
+    type: 'flex',
+    altText:
+      mode === 'change'
+        ? '変更する予約を選択してください'
+        : '確認する予約を選択してください',
+    contents: {
+      type: 'carousel',
+      contents: bubbles
+    }
+  };
+}
+
+function findReservationByNo(reservations, reservationNo) {
+  const targetNo = String(reservationNo || '').trim();
+
+  return (
+    (Array.isArray(reservations) ? reservations : []).find(
+      (reservation) =>
+        String(reservation?.reservationNo || '').trim() === targetNo
+    ) || null
+  );
+}
+
+function buildReservationDetailActionsMessage(reservation) {
+  return withNavQuickReply(
+    {
+      type: 'text',
+      text:
+        `${getReservationSourceLabel(reservation)}です。\n` +
+        'この予約を変更する場合は、下のボタンを押してください。',
+      quickReply: {
+        items: [
+          quickPostbackItem(
+            'この予約を変更',
+            `action=${SELECT_CHANGE_RESERVATION_ACTION}` +
+              `&reservationNo=${encodeURIComponent(
+                reservation.reservationNo
+              )}`,
+            'この予約を変更'
+          )
+        ]
+      }
+    },
+    { includeBack: false, includeCancel: false }
+  );
+}
+
+function buildReservationLookupPhoneMessage() {
+  return withNavQuickReply(
+    textMessage(
+      'Web予約を含むご予約を確認するため、\n予約時に登録した電話番号を入力してください📞\n例：09012345678'
+    ),
+    { includeBack: false, includeCancel: false }
+  );
+}
+
+async function startReservationPhoneLookup(replyToken, userId, mode = 'view') {
+  clearSession(userId);
+  await clearPendingSession(userId);
+
+  const session = getSession(userId);
+  session.step = 'waiting_reservation_lookup_phone';
+  session.flowType = mode === 'change' ? 'lookup_change' : 'lookup_view';
+  session.history = [];
+
+  await savePendingSession(userId, session);
+  await replyMessage(replyToken, [buildReservationLookupPhoneMessage()]);
+}
+
+async function handleViewLatestReservation(replyToken, userId, lookupPhone = '') {
+  const result = await fetchReservations(userId, lookupPhone);
 
   if (!result.ok) {
     await replyMessage(replyToken, [
-      textMessage(`予約内容の取得でエラーが起きました。\n${result.error || 'unknown error'}`)
+      textMessage(
+        `予約内容の取得でエラーが起きました。\n${result.error || 'unknown error'}`
+      )
     ]);
     return;
   }
 
-  if (!result.found) {
-    await replyMessage(replyToken, [textMessage('現在確認できるご予約がありません。')]);
+  if (!result.found || !result.reservations.length) {
+    if (!lookupPhone) {
+      await startReservationPhoneLookup(replyToken, userId, 'view');
+      return;
+    }
+
+    await replyMessage(replyToken, [
+      textMessage(
+        '入力された電話番号で、現在確認できるご予約がありません。'
+      )
+    ]);
+    return;
+  }
+
+  if (result.reservations.length === 1) {
+    const reservation = result.reservations[0];
+
+    await replyMessage(replyToken, [
+      buildLatestReservationMessage(reservation),
+      buildReservationDetailActionsMessage(reservation)
+    ]);
     return;
   }
 
   await replyMessage(replyToken, [
-    buildLatestReservationMessage(result.reservation),
-    withNavQuickReply(
-      {
-        type: 'text',
-        text: '予約変更する場合は下のボタンから進めます。',
-        quickReply: {
-          items: [quickPostbackItem('予約変更', 'action=begin_change', '予約変更')]
-        }
-      },
-      { includeBack: false, includeCancel: false }
-    )
+    textMessage(
+      `現在確認できるご予約が${result.reservations.length}件あります📋\n` +
+      '確認する予約を選んでください。'
+    ),
+    buildReservationListFlexMessage(result.reservations, 'view')
   ]);
 }
 
-async function beginReservationChangeFlow(replyToken, userId) {
-  const latest = await fetchLatestReservation(userId);
+async function beginReservationChangeFlow(
+  replyToken,
+  userId,
+  selectedReservationNo = '',
+  lookupPhone = ''
+) {
+  const result = await fetchReservations(userId, lookupPhone);
 
-  if (!latest.ok || !latest.found) {
+  if (!result.ok) {
     await replyMessage(replyToken, [
-      textMessage('変更できる予約が見つかりませんでした。'),
-      startGuideMessage()
+      textMessage(
+        `予約情報の取得でエラーが起きました。\n${result.error || 'unknown error'}`
+      )
     ]);
     return;
   }
 
-  const reservation = latest.reservation;
+  if (!result.found || !result.reservations.length) {
+    if (!lookupPhone) {
+      await startReservationPhoneLookup(replyToken, userId, 'change');
+      return;
+    }
+
+    await replyMessage(replyToken, [
+      textMessage(
+        '入力された電話番号で、変更できる予約が見つかりませんでした。'
+      )
+    ]);
+    return;
+  }
+
+  if (selectedReservationNo) {
+    const selectedReservation = findReservationByNo(
+      result.reservations,
+      selectedReservationNo
+    );
+
+    if (!selectedReservation) {
+      await replyMessage(replyToken, [
+        textMessage(
+          '選択された予約が見つかりませんでした。\nもう一度予約確認からお試しください。'
+        )
+      ]);
+      return;
+    }
+
+    await startReservationChangeFlow(
+      replyToken,
+      userId,
+      selectedReservation
+    );
+    return;
+  }
+
+  if (result.reservations.length === 1) {
+    await startReservationChangeFlow(
+      replyToken,
+      userId,
+      result.reservations[0]
+    );
+    return;
+  }
+
+  await replyMessage(replyToken, [
+    textMessage(
+      `変更できるご予約が${result.reservations.length}件あります。\n` +
+      '変更する予約を選んでください。'
+    ),
+    buildReservationListFlexMessage(result.reservations, 'change')
+  ]);
+}
+
+async function startReservationChangeFlow(
+  replyToken,
+  userId,
+  reservation
+) {
+  if (!reservation) {
+    await replyMessage(replyToken, [
+      textMessage('変更対象の予約が見つかりませんでした。')
+    ]);
+    return;
+  }
 
   if (String(reservation.status || '') === 'キャンセル') {
     await replyMessage(replyToken, [
@@ -3236,7 +3613,9 @@ async function beginReservationChangeFlow(replyToken, userId) {
   }
 
   if (isReservationChangeLocked(reservation)) {
-    await replyMessage(replyToken, [buildReservationChangeLockedMessage(reservation)]);
+    await replyMessage(replyToken, [
+      buildReservationChangeLockedMessage(reservation)
+    ]);
     return;
   }
 
@@ -3248,12 +3627,15 @@ async function beginReservationChangeFlow(replyToken, userId) {
   session.step = 'change_menu';
   session.date = reservation.date || '';
   session.time = reservation.time || '';
-  session.items = Array.isArray(reservation.items) ? reservation.items.map((item) => ({ ...item })) : [];
+  session.items = Array.isArray(reservation.items)
+    ? reservation.items.map((item) => ({ ...item }))
+    : [];
   session.currentSelection = null;
   session.name = reservation.name || '';
   session.phone = reservation.phone || '';
-  session.latestReservation = reservation;
+  session.latestReservation = { ...reservation };
   session.latestReservationNo = reservation.reservationNo || '';
+  session.editingReservationUserId = reservation.userId || '';
   session.history = [];
 
   const bookingConfig = await fetchBookingConfig();
@@ -3263,17 +3645,20 @@ async function beginReservationChangeFlow(replyToken, userId) {
           .map((item) => normalizeYmdDate(item?.date))
           .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
       : [];
+
   session.availableDates = buildEffectiveAvailableDates(rawAvailableDates);
   session.menuStatuses = await fetchMenuStatusesConfig();
 
   const menuResult = await fetchDailyMenu(session.date);
-  session.dailyMenu = menuResult?.ok && menuResult.menu
-    ? {
-        ...DEFAULT_DAILY_MENU,
-        ...menuResult.menu,
-        allowLargeRice: menuResult.menu.allowLargeRice !== false
-      }
-    : { ...DEFAULT_DAILY_MENU };
+  session.dailyMenu =
+    menuResult?.ok && menuResult.menu
+      ? {
+          ...DEFAULT_DAILY_MENU,
+          ...menuResult.menu,
+          allowLargeRice:
+            menuResult.menu.allowLargeRice !== false
+        }
+      : { ...DEFAULT_DAILY_MENU };
 
   await savePendingSession(userId, session);
 
@@ -3360,9 +3745,14 @@ async function handleReservationChangeConfirm(replyToken, userId, session) {
     return;
   }
 
+  const originalReservationUserId =
+    currentSession.latestReservation?.userId ||
+    currentSession.editingReservationUserId ||
+    '';
+
   const changedReservation = {
     reservationNo,
-    userId,
+    userId: originalReservationUserId,
     date: currentSession.date,
     time: currentSession.time,
     items: currentSession.items.map((item) => ({ ...item })),
@@ -3414,9 +3804,14 @@ async function handleReservationCancelConfirm(replyToken, userId, session) {
     return;
   }
 
+  const originalReservationUserId =
+    currentSession.latestReservation?.userId ||
+    currentSession.editingReservationUserId ||
+    '';
+
   const cancelReservation = {
     reservationNo,
-    userId,
+    userId: originalReservationUserId,
     date: currentSession.date,
     time: currentSession.time,
     items: currentSession.items.map((item) => ({ ...item })),
@@ -3632,25 +4027,97 @@ async function cancelReservationInSheet(reservation) {
   }
 }
 
-async function fetchLatestReservation(userId) {
+async function fetchReservations(userId, phone = '') {
   try {
-    const url = buildReservationApiUrl({ action: 'getLatestReservation', userId });
-    const response = await fetch(url);
-    const json = await response.json();
+    const url = buildReservationApiUrl({
+      action: 'getReservations',
+      userId: phone ? '' : userId,
+      phone
+    });
 
-    if (!json?.ok || !json?.found) {
-      return { ok: true, found: false };
+    const response = await fetch(url);
+    const text = await response.text();
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        found: false,
+        reservations: [],
+        error: text || `HTTP ${response.status}`
+      };
     }
+
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (_err) {
+      return {
+        ok: false,
+        found: false,
+        reservations: [],
+        error: `予約データの解析に失敗しました：${text}`
+      };
+    }
+
+    if (!json?.ok) {
+      return {
+        ok: false,
+        found: false,
+        reservations: [],
+        error: json?.error || '予約情報の取得に失敗しました。'
+      };
+    }
+
+    const rawReservations = Array.isArray(json.reservations)
+      ? json.reservations
+      : [];
+
+    const reservations = rawReservations
+      .map((row) => reservationFromApiRow(row))
+      .filter((reservation) => reservation.reservationNo);
 
     return {
       ok: true,
-      found: true,
-      reservation: reservationFromApiRow(json.reservation || json.data || json.row || {})
+      found: reservations.length > 0,
+      phone: json.phone || '',
+      count: reservations.length,
+      reservations
     };
   } catch (err) {
-    console.error('fetchLatestReservation error:', err);
-    return { ok: false, error: err.message || String(err), found: false };
+    console.error('fetchReservations error:', err);
+
+    return {
+      ok: false,
+      found: false,
+      reservations: [],
+      error: err.message || String(err)
+    };
   }
+}
+
+async function fetchLatestReservation(userId) {
+  const result = await fetchReservations(userId);
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      found: false,
+      error: result.error
+    };
+  }
+
+  if (!result.found || !result.reservations.length) {
+    return {
+      ok: true,
+      found: false
+    };
+  }
+
+  return {
+    ok: true,
+    found: true,
+    reservation: result.reservations[0]
+  };
 }
 
 function reservationFromApiRow(row) {
@@ -3684,13 +4151,24 @@ function reservationFromApiRow(row) {
     raw.reservation_time ||
     '';
 
+  const reservationNo =
+    raw.reservationNo ||
+    raw.reservation_no ||
+    raw.no ||
+    raw.id ||
+    '';
+
+  const source =
+    raw.source ||
+    raw.orderSource ||
+    (String(reservationNo).toUpperCase().startsWith('WEB-')
+      ? 'WEB'
+      : 'LINE');
+
   return {
-    reservationNo:
-      raw.reservationNo ||
-      raw.reservation_no ||
-      raw.no ||
-      raw.id ||
-      '',
+    reservationNo,
+    source,
+    orderSource: source,
     userId:
       raw.userId ||
       raw.user_id ||
@@ -3698,14 +4176,48 @@ function reservationFromApiRow(row) {
     date: normalizeYmdDate(dateValue),
     time: String(timeValue || '').trim(),
     items: Array.isArray(items) ? items : [],
-    itemCount: Number(raw.itemCount || raw.item_count || 0),
-    totalQty: Number(raw.totalQty || raw.total_qty || 0),
-    total: Number(raw.total || raw.amount || 0),
-    name: raw.name || '',
-    phone: String(raw.phone || raw.tel || raw.telephone || ''),
-    status: raw.status || '受付済み',
-    createdAt: raw.createdAt || raw.created_at || '',
-    updatedAt: raw.updatedAt || raw.updated_at || ''
+    itemCount: Number(
+      raw.itemCount ||
+      raw.item_count ||
+      0
+    ),
+    totalQty: Number(
+      raw.totalQty ||
+      raw.totalQuantity ||
+      raw.total_qty ||
+      0
+    ),
+    total: Number(
+      raw.total ||
+      raw.totalAmount ||
+      raw.amount ||
+      0
+    ),
+    name:
+      raw.name ||
+      raw.customerName ||
+      '',
+    phone: String(
+      raw.phone ||
+      raw.tel ||
+      raw.telephone ||
+      ''
+    ),
+    status:
+      raw.status ||
+      '受付済み',
+    orderLines:
+      raw.orderLines ||
+      raw.order_lines ||
+      '',
+    createdAt:
+      raw.createdAt ||
+      raw.created_at ||
+      '',
+    updatedAt:
+      raw.updatedAt ||
+      raw.updated_at ||
+      ''
   };
 }
 
