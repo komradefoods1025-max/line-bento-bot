@@ -1682,19 +1682,24 @@ function buildEffectiveAvailableDates(rawDates, now = new Date()) {
   const normalized = (rawDates || [])
     .map((date) => normalizeYmdDate(date))
     .filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date))
-    .filter((date) => date >= ORDER_START_DATE);
+    .filter((date) => date >= ORDER_START_DATE)
+    .filter((date) => !BLOCKED_RESERVATION_DATES.has(date));
 
   const mergedDateSet = new Set(normalized);
   const todayJst = getNowJstDateLabel(now);
 
   if (
     todayJst >= ORDER_START_DATE &&
+    !BLOCKED_RESERVATION_DATES.has(todayJst) &&
     getAvailablePickupTimesForDate(todayJst, now).length > 0
   ) {
     mergedDateSet.add(todayJst);
   }
 
-  return filterAvailableDatesByPickupTime(Array.from(mergedDateSet), now).sort();
+  return filterAvailableDatesByPickupTime(
+    Array.from(mergedDateSet),
+    now
+  ).sort();
 }
 
 function buildTimeMessage(dateText) {
