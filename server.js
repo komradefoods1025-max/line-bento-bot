@@ -18,6 +18,12 @@ const STORE_CODE = 'KMR';
 const TIME_ZONE = 'Asia/Tokyo';
 const BOOKABLE_DATE_COUNT = 31;
 const ORDER_START_DATE = '2026-04-02';
+
+const BLOCKED_RESERVATION_DATES = new Set([
+  '2026-09-09',
+  '2026-09-13'
+]);
+
 const MENU_IMAGE_URL = 'https://teppanyaki-toda.com/wp-content/uploads/2026/06/menu1.png';
 
 const PENDING_REMINDER_MINUTES = Number(process.env.PENDING_REMINDER_MINUTES || 5);
@@ -1651,7 +1657,7 @@ function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
     return PICKUP_TIMES;
   }
 
-  if (normalizedDate < ORDER_START_DATE) {
+  if (BLOCKED_RESERVATION_DATES.has(normalizedDate)) {
     return [];
   }
 
