@@ -96,11 +96,11 @@ const DRINK_OPTIONS = [
 ];
 
 const DEFAULT_DAILY_MENU = {
-  name: '日替わり弁当',
-  price: 600,
-  description: 'その日のお楽しみメニューです',
+  name: 'アジフライ弁当',
+  price: 880,
+  description: '期間限定・数量限定！サクッとふっくらアジフライ弁当',
   imageUrl:
-    'https://komradefoods1025-geskw.wordpress.com/wp-content/uploads/2026/03/e38380e382a6e383b3e383ade383bce38389.jpeg',
+    'https://teppanyaki-toda.com/wp-content/uploads/2026/09/ajifry.png',
   allowLargeRice: true
 };
 
