@@ -105,6 +105,18 @@ const DEFAULT_DAILY_MENU = {
 };
 
 const MENUS = {
+
+  aji_fry: {
+    name: 'アジフライ弁当',
+    price: 880,
+    description: '期間限定・数量限定！サクッとふっくらアジフライ弁当',
+    imageUrl:
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/09/ajifry.png',
+    allowLargeRice: true,
+    soldOut: false,
+    visible: true
+  },
+
   karaage: {
     name: 'からあげ弁当',
     price: 700,
