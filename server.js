@@ -20,8 +20,9 @@ const BOOKABLE_DATE_COUNT = 31;
 const ORDER_START_DATE = '2026-04-02';
 
 const BLOCKED_RESERVATION_DATES = new Set([
-  '2026-09-09',
-  '2026-09-13'
+  '2026-10-08',
+  '2026-10-10',
+  '2026-10-13'
 ]);
 
 const MENU_IMAGE_URL = 'https://teppanyaki-toda.com/wp-content/uploads/2026/06/menu1.png';
@@ -1669,7 +1670,12 @@ function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
     return PICKUP_TIMES;
   }
 
+  // 指定休業日は予約不可
   if (BLOCKED_RESERVATION_DATES.has(normalizedDate)) {
+    return [];
+  }
+
+  if (normalizedDate < ORDER_START_DATE) {
     return [];
   }
 
@@ -1679,10 +1685,13 @@ function getAvailablePickupTimesForDate(dateStr, now = new Date()) {
     return PICKUP_TIMES;
   }
 
-  const threshold = new Date(now.getTime() + SAME_DAY_LEAD_MINUTES * 60 * 1000);
+  const threshold = new Date(
+    now.getTime() + SAME_DAY_LEAD_MINUTES * 60 * 1000
+  );
 
   return PICKUP_TIMES.filter((time) => {
     const pickupDateTime = jstDateTimeToUtcDate(normalizedDate, time);
+
     return pickupDateTime.getTime() >= threshold.getTime();
   });
 }
@@ -1693,7 +1702,9 @@ function getNowJstDateLabel(now = new Date()) {
 }
 
 function filterAvailableDatesByPickupTime(dates, now = new Date()) {
-  return (dates || []).filter((date) => getAvailablePickupTimesForDate(date, now).length > 0);
+  return (dates || []).filter(
+    (date) => getAvailablePickupTimesForDate(date, now).length > 0
+  );
 }
 
 function buildEffectiveAvailableDates(rawDates, now = new Date()) {
