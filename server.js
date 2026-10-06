@@ -24,7 +24,7 @@ const STORE_NOTIFY_GROUP_ID = process.env.STORE_NOTIFY_GROUP_ID || '';
 
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-10-06-maintenance-phone-01';
+const APP_VERSION = '2026-10-07-richmenu-maintenance-02';
 
 const MAINTENANCE_RESERVATION_MESSAGE =
   'ただいまメンテナンス中です🙇‍♂️\n' +
@@ -1000,7 +1000,14 @@ async function handleEvent(event) {
 
     if (text === 'メニュー') {
 
-      await replyMessage(replyToken, buildMenuImageMessages());
+      if (hasActiveSession(session)) {
+        await clearPendingSession(userId);
+        clearSession(userId);
+      }
+
+      await replyMessage(replyToken, [
+        textMessage(MAINTENANCE_RESERVATION_MESSAGE)
+      ]);
 
       return;
 
@@ -1010,33 +1017,17 @@ async function handleEvent(event) {
 
     if (isStartReservationText(text) || isResetText(text)) {
 
-  if (isStartTapLocked(userId)) {
+      if (hasActiveSession(session)) {
+        await clearPendingSession(userId);
+        clearSession(userId);
+      }
 
-    return;
+      await replyMessage(replyToken, [
+        textMessage(MAINTENANCE_RESERVATION_MESSAGE)
+      ]);
 
-  }
-
-
-
-  if (hasActiveSession(session)) {
-
-    await clearPendingSession(userId);
-
-    clearSession(userId);
-
-  }
-
-
-
-  await startLineLoading(userId, 10);
-
-  await sleep(1200);
-
-  await beginReservationFlow(replyToken, userId);
-
-  return;
-
-}
+      return;
+    }
 
 
 
@@ -1554,65 +1545,33 @@ async function handleEvent(event) {
 
     if (data.action === 'reserve_start' || data.action === 'restart') {
 
-  if (isStartTapLocked(userId)) {
+      if (hasActiveSession(session)) {
+        await clearPendingSession(userId);
+        clearSession(userId);
+      }
 
-    return;
+      await replyMessage(replyToken, [
+        textMessage(MAINTENANCE_RESERVATION_MESSAGE)
+      ]);
 
-  }
-
-
-
-  if (hasActiveSession(session)) {
-
-    await clearPendingSession(userId);
-
-    clearSession(userId);
-
-  }
-
-
-
-  await startLineLoading(userId, 10);
-
-  await sleep(1200);
-
-  await beginReservationFlow(replyToken, userId);
-
-  return;
-
-}
+      return;
+    }
 
 
 
     if (data.action === 'start_order_from_menu_image') {
 
-  if (isStartTapLocked(userId)) {
+      if (hasActiveSession(session)) {
+        await clearPendingSession(userId);
+        clearSession(userId);
+      }
 
-    return;
+      await replyMessage(replyToken, [
+        textMessage(MAINTENANCE_RESERVATION_MESSAGE)
+      ]);
 
-  }
-
-
-
-  if (hasActiveSession(session)) {
-
-    await clearPendingSession(userId);
-
-    clearSession(userId);
-
-  }
-
-
-
-  await startLineLoading(userId, 10);
-
-  await sleep(1200);
-
-  await beginReservationFlow(replyToken, userId);
-
-  return;
-
-}
+      return;
+    }
 
 
 
@@ -5499,41 +5458,39 @@ async function savePendingSession(userId, session) {
 
       userId,
 
-      step: session.step,
+      step: session.step || '',
 
-      payload: JSON.stringify({
+      lastActionAtMillis: Date.now(),
 
-        flowType: session.flowType,
+      lastActionAt: getJstDateTimeLabel(),
 
-        date: session.date,
+      date: session.date || '',
 
-        time: session.time,
+      time: session.time || '',
 
-        items: session.items,
+      itemsJson: JSON.stringify(session.items || []),
 
-        currentSelection: session.currentSelection,
+      currentSelectionJson: JSON.stringify(session.currentSelection || null),
 
-        name: session.name,
+      name: session.name || '',
 
-        phone: session.phone,
+      phone: session.phone || '',
 
-        history: session.history,
+      availableDatesJson: JSON.stringify(session.availableDates || []),
 
-        dailyMenu: session.dailyMenu,
+      availableDateOptionsJson: JSON.stringify(session.availableDateOptions || []),
 
-        menuStatuses: session.menuStatuses,
+      historyJson: JSON.stringify(session.history || []),
 
-        availableDates: session.availableDates,
+      flowType: session.flowType || 'new',
 
-        availableDateOptions: session.availableDateOptions,
+      editingReservationNo: session.latestReservationNo || '',
 
-        latestReservation: session.latestReservation || null,
+      editingStatus: session.latestReservation?.status || '',
 
-        latestReservationNo: session.latestReservationNo || '',
+      dailyMenuJson: JSON.stringify(session.dailyMenu || DEFAULT_DAILY_MENU),
 
-        editingReservationUserId: session.editingReservationUserId || ''
-
-      })
+      menuStatusesJson: JSON.stringify(session.menuStatuses || {})
 
     });
 
@@ -5565,47 +5522,47 @@ async function clearPendingSession(userId) {
 
 function restoreSessionFromPending(pending) {
 
-  const payload = safeJsonParse(pending?.payload || '{}', {});
+  const row = pending?.order || pending?.pending || pending?.data || pending || {};
 
-  const session = createBaseSession(pending?.userId || '');
+  const session = createBaseSession(row.userId || '');
 
 
 
-  session.flowType = payload.flowType || 'new';
+  session.flowType = row.flowType || 'new';
 
-  session.step = pending?.step || payload.step || '';
+  session.step = row.step || '';
 
-  session.date = payload.date || '';
+  session.date = normalizeYmdDate(row.date || '');
 
-  session.time = payload.time || '';
+  session.time = String(row.time || '').trim();
 
-  session.items = Array.isArray(payload.items) ? payload.items : [];
+  session.items = safeJsonParse(row.itemsJson || '[]', []);
 
-  session.currentSelection = payload.currentSelection || null;
+  session.currentSelection = safeJsonParse(row.currentSelectionJson || 'null', null);
 
-  session.name = payload.name || '';
+  session.name = row.name || '';
 
-  session.phone = payload.phone || '';
+  session.phone = row.phone || '';
 
-  session.history = Array.isArray(payload.history) ? payload.history : [];
+  session.history = safeJsonParse(row.historyJson || '[]', []);
 
-  session.dailyMenu = payload.dailyMenu || { ...DEFAULT_DAILY_MENU };
+  session.dailyMenu = safeJsonParse(row.dailyMenuJson || '{}', null) || { ...DEFAULT_DAILY_MENU };
 
-  session.menuStatuses = payload.menuStatuses || {};
+  session.menuStatuses = safeJsonParse(row.menuStatusesJson || '{}', {});
 
-  session.latestReservation = payload.latestReservation || null;
+  session.latestReservationNo = row.editingReservationNo || '';
 
-  session.latestReservationNo = payload.latestReservationNo || '';
+  session.latestReservation = row.editingReservationNo
 
-  session.editingReservationUserId = payload.editingReservationUserId || '';
+    ? { reservationNo: row.editingReservationNo, status: row.editingStatus || '' }
 
-  session.availableDates = Array.isArray(payload.availableDates) ? payload.availableDates : [];
+    : null;
 
-  session.availableDateOptions = Array.isArray(payload.availableDateOptions)
+  session.editingReservationUserId = row.userId || '';
 
-    ? payload.availableDateOptions
+  session.availableDates = safeJsonParse(row.availableDatesJson || '[]', []);
 
-    : [];
+  session.availableDateOptions = safeJsonParse(row.availableDateOptionsJson || '[]', []);
 
 
 
@@ -8545,11 +8502,19 @@ async function savePendingOrder(data) {
 
       headers: { 'Content-Type': 'application/json' },
 
-      body: JSON.stringify({ action: 'savePendingOrder', ...data })
+      body: JSON.stringify({ action: 'savePending', ...data })
 
     });
 
-    return await response.json();
+    const text = await response.text();
+
+    if (!response.ok) {
+
+      return { ok: false, error: text };
+
+    }
+
+    return safeJsonParse(text, { ok: false, error: text });
 
   } catch (err) {
 
@@ -8567,11 +8532,19 @@ async function getPendingOrder(userId) {
 
   try {
 
-    const url = buildReservationApiUrl({ action: 'getPendingOrder', userId });
+    const url = buildReservationApiUrl({ action: 'getPending', userId });
 
     const response = await fetch(url);
 
-    return await response.json();
+    const text = await response.text();
+
+    if (!response.ok) {
+
+      return { ok: false, error: text, found: false };
+
+    }
+
+    return safeJsonParse(text, { ok: false, error: text, found: false });
 
   } catch (err) {
 
@@ -8589,17 +8562,19 @@ async function clearPendingOrder(userId) {
 
   try {
 
-    const response = await fetch(RESERVATION_SAVE_URL, {
+    const url = buildReservationApiUrl({ action: 'clearPending', userId });
 
-      method: 'POST',
+    const response = await fetch(url);
 
-      headers: { 'Content-Type': 'application/json' },
+    const text = await response.text();
 
-      body: JSON.stringify({ action: 'clearPendingOrder', userId })
+    if (!response.ok) {
 
-    });
+      return { ok: false, error: text };
 
-    return await response.json();
+    }
+
+    return safeJsonParse(text, { ok: false, error: text });
 
   } catch (err) {
 
@@ -8613,23 +8588,35 @@ async function clearPendingOrder(userId) {
 
 
 
-async function listPendingOrders() {
+async function fetchReminderTargets(minutes) {
 
   try {
 
-    const url = buildReservationApiUrl({ action: 'listPendingOrders' });
+    const url = buildReservationApiUrl({
+
+      action: 'getReminderTargets',
+
+      minutes: String(minutes)
+
+    });
 
     const response = await fetch(url);
 
-    const json = await response.json();
+    const text = await response.text();
 
-    return json;
+    if (!response.ok) {
+
+      return { ok: false, error: text, targets: [] };
+
+    }
+
+    return safeJsonParse(text, { ok: false, error: text, targets: [] });
 
   } catch (err) {
 
-    console.error('listPendingOrders error:', err);
+    console.error('fetchReminderTargets error:', err);
 
-    return { ok: false, error: err.message || String(err), rows: [] };
+    return { ok: false, error: err.message || String(err), targets: [] };
 
   }
 
@@ -8641,17 +8628,19 @@ async function markReminderSent(userId) {
 
   try {
 
-    const response = await fetch(RESERVATION_SAVE_URL, {
+    const url = buildReservationApiUrl({ action: 'markReminderSent', userId });
 
-      method: 'POST',
+    const response = await fetch(url);
 
-      headers: { 'Content-Type': 'application/json' },
+    const text = await response.text();
 
-      body: JSON.stringify({ action: 'markReminderSent', userId })
+    if (!response.ok) {
 
-    });
+      return { ok: false, error: text };
 
-    return await response.json();
+    }
+
+    return safeJsonParse(text, { ok: false, error: text });
 
   } catch (err) {
 
@@ -8727,101 +8716,67 @@ async function runPendingReminderJob() {
 
 
 
-  const pendingList = await listPendingOrders();
-
-  const rows = Array.isArray(pendingList?.rows)
-
-    ? pendingList.rows
-
-    : Array.isArray(pendingList?.data)
-
-      ? pendingList.data
-
-      : [];
+  const targetsResult = await fetchReminderTargets(PENDING_REMINDER_MINUTES);
 
 
 
-  for (const pending of rows) {
+  if (!targetsResult?.ok) {
 
-    result.checked += 1;
+    return {
+
+      ok: false,
+
+      error: targetsResult?.error || 'failed to fetch reminder targets',
+
+      checked: 0,
+
+      pushed: 0,
+
+      skipped: 0,
+
+      failed: 0,
+
+      details: []
+
+    };
+
+  }
+
+
+
+  const targets = Array.isArray(targetsResult.targets) ? targetsResult.targets : [];
+
+  result.checked = targets.length;
+
+
+
+  for (const target of targets) {
+
+    const userId = target?.userId || '';
+
+
+
+    if (!userId) {
+
+      result.skipped += 1;
+
+      result.details.push({ status: 'skipped', reason: 'missing userId' });
+
+      continue;
+
+    }
 
 
 
     try {
 
-      const userId = pending.userId || pending.user_id || '';
-
-      if (!userId) {
-
-        result.skipped += 1;
-
-        result.details.push({ status: 'skipped', reason: 'missing userId' });
-
-        continue;
-
-      }
-
-
-
-      const updatedAt = new Date(pending.updatedAt || pending.updated_at || pending.createdAt || pending.created_at || 0);
-
-      const diffMinutes = Math.floor((Date.now() - updatedAt.getTime()) / 60000);
-
-
-
-      if (!Number.isFinite(diffMinutes) || diffMinutes < PENDING_REMINDER_MINUTES) {
-
-        result.skipped += 1;
-
-        result.details.push({ userId, status: 'skipped', reason: 'not due' });
-
-        continue;
-
-      }
-
-
-
-      const alreadySent = String(pending.reminderSent || pending.reminder_sent || '') === 'true';
-
-      if (alreadySent) {
-
-        result.skipped += 1;
-
-        result.details.push({ userId, status: 'skipped', reason: 'already sent' });
-
-        continue;
-
-      }
-
-
-
-      const session = restoreSessionFromPending(pending);
-
-
-
-      if (!hasActiveSession(session)) {
-
-        result.skipped += 1;
-
-        result.details.push({ userId, status: 'skipped', reason: 'inactive session' });
-
-        continue;
-
-      }
-
-
-
-      const messages = buildReminderMessages(session);
-
-      await pushMessage(userId, messages);
+      await pushMessage(userId, buildReminderMessages({ step: target.step || '' }));
 
       await markReminderSent(userId);
 
-
-
       result.pushed += 1;
 
-      result.details.push({ userId, status: 'pushed', step: session.step || '' });
+      result.details.push({ userId, status: 'pushed', step: target.step || '' });
 
     } catch (err) {
 
@@ -8829,7 +8784,7 @@ async function runPendingReminderJob() {
 
       result.details.push({
 
-        userId: pending?.userId || pending?.user_id || '',
+        userId,
 
         status: 'failed',
 
