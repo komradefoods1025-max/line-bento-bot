@@ -24,7 +24,12 @@ const STORE_NOTIFY_GROUP_ID = process.env.STORE_NOTIFY_GROUP_ID || '';
 
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-10-06-blocked-dates-only-01';
+const APP_VERSION = '2026-10-06-maintenance-phone-01';
+
+const MAINTENANCE_RESERVATION_MESSAGE =
+  'ただいまメンテナンス中です🙇‍♂️\n' +
+  'お手数ですがお電話にてご予約お願いします！\n' +
+  'TEL 048-441-5517';
 
 
 
