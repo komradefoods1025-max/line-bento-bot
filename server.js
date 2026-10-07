@@ -24,12 +24,9 @@ const STORE_NOTIFY_GROUP_ID = process.env.STORE_NOTIFY_GROUP_ID || '';
 
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-10-07-richmenu-maintenance-02';
+const APP_VERSION = '2026-10-07-normal-menu-01';
 
-const MAINTENANCE_RESERVATION_MESSAGE =
-  'ただいまメンテナンス中です🙇‍♂️\n' +
-  'お手数ですがお電話にてご予約お願いします！\n' +
-  'TEL 048-441-5517';
+
 
 
 
@@ -998,7 +995,12 @@ async function handleEvent(event) {
 
 
 
-    if (text === 'メニュー') {
+   if (text === 'メニュー') {
+
+  await replyMessage(replyToken, buildMenuImageMessages());
+
+  return;
+}
 
       if (hasActiveSession(session)) {
         await clearPendingSession(userId);
@@ -1015,7 +1017,24 @@ async function handleEvent(event) {
 
 
 
-    if (isStartReservationText(text) || isResetText(text)) {
+  if (isStartReservationText(text) || isResetText(text)) {
+
+  if (isStartTapLocked(userId)) {
+    return;
+  }
+
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
+
+  await startLineLoading(userId, 10);
+  await sleep(1200);
+
+  await beginReservationFlow(replyToken, userId);
+
+  return;
+}
 
       if (hasActiveSession(session)) {
         await clearPendingSession(userId);
@@ -1543,7 +1562,24 @@ async function handleEvent(event) {
 
 
 
-    if (data.action === 'reserve_start' || data.action === 'restart') {
+if (data.action === 'reserve_start' || data.action === 'restart') {
+
+  if (isStartTapLocked(userId)) {
+    return;
+  }
+
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
+
+  await startLineLoading(userId, 10);
+  await sleep(1200);
+
+  await beginReservationFlow(replyToken, userId);
+
+  return;
+}
 
       if (hasActiveSession(session)) {
         await clearPendingSession(userId);
@@ -1559,7 +1595,24 @@ async function handleEvent(event) {
 
 
 
-    if (data.action === 'start_order_from_menu_image') {
+   if (data.action === 'start_order_from_menu_image') {
+
+  if (isStartTapLocked(userId)) {
+    return;
+  }
+
+  if (hasActiveSession(session)) {
+    await clearPendingSession(userId);
+    clearSession(userId);
+  }
+
+  await startLineLoading(userId, 10);
+  await sleep(1200);
+
+  await beginReservationFlow(replyToken, userId);
+
+  return;
+}
 
       if (hasActiveSession(session)) {
         await clearPendingSession(userId);
