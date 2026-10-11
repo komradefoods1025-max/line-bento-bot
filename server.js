@@ -200,7 +200,9 @@ const DEFAULT_DAILY_MENU = {
 
     'https://teppanyaki-toda.com/wp-content/uploads/2026/09/ajifry.png',
 
-  allowLargeRice: true
+  allowLargeRice: true,
+  soldOut: true,
+  visible: false
 
 };
 
@@ -224,9 +226,9 @@ const MENUS = {
 
     allowLargeRice: true,
 
-    soldOut: false,
+    soldOut: true,
 
-    visible: true
+    visible: false
 
   },
 
@@ -3566,7 +3568,11 @@ function resolveMenuByKey(session, itemKey) {
 
     const daily = session?.dailyMenu || DEFAULT_DAILY_MENU;
 
-    return applyStatusToMenu(DAILY_MENU_KEY, daily, statusMap);
+    const resolvedDaily = applyStatusToMenu(DAILY_MENU_KEY, daily, statusMap);
+    if (String(resolvedDaily.name || '').includes('アジフライ')) {
+      return { ...resolvedDaily, visible: false, soldOut: true };
+    }
+    return resolvedDaily;
 
   }
 
