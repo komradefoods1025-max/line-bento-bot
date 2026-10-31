@@ -24,7 +24,7 @@ const STORE_NOTIFY_GROUP_ID = process.env.STORE_NOTIFY_GROUP_ID || '';
 
 const LIFF_ID = process.env.LIFF_ID || '';
 
-const APP_VERSION = '2026-10-07-normal-menu-01';
+const APP_VERSION = '2026-11-01-featured-menu-fix-01';
 
 
 
@@ -201,8 +201,8 @@ const DEFAULT_DAILY_MENU = {
     'https://teppanyaki-toda.com/wp-content/uploads/2026/11/11月おすすめ弁当.png',
 
   allowLargeRice: true,
-  soldOut: true,
-  visible: false
+  soldOut: false,
+  visible: true
 
 };
 
@@ -3568,7 +3568,12 @@ function resolveMenuByKey(session, itemKey) {
 
     const daily = session?.dailyMenu || DEFAULT_DAILY_MENU;
 
-    const resolvedDaily = applyStatusToMenu(DAILY_MENU_KEY, daily, statusMap);
+    const resolvedDaily = {
+      ...daily,
+      ...DEFAULT_DAILY_MENU,
+      soldOut: false,
+      visible: true
+    };
     if (String(resolvedDaily.name || '').includes('アジフライ')) {
       return { ...resolvedDaily, visible: false, soldOut: true };
     }
@@ -4045,6 +4050,12 @@ function buildMenuFlexMessage(session, bubbles) {
 function buildMenuFlexMessages(session) {
 
   const bubbles = [];
+
+  // 今月のおすすめを先頭に表示する
+  const featuredMenu = resolveMenuByKey(session, DAILY_MENU_KEY);
+  if (featuredMenu && featuredMenu.visible !== false) {
+    bubbles.push(buildMenuBubble(DAILY_MENU_KEY, featuredMenu));
+  }
 
 
 
