@@ -190,15 +190,15 @@ const DRINK_OPTIONS = [
 
 const DEFAULT_DAILY_MENU = {
 
-  name: 'アジフライ弁当',
+  name: ‘秋のきのこあんかけハンバーグ弁当,
 
-  price: 880,
+  price: 980,
 
-  description: '期間限定・数量限定！サクッとふっくらアジフライ弁当',
+  description: '期間限定・数量限定！旬なきのことジューシーハンバーグ
 
   imageUrl:
 
-    'https://teppanyaki-toda.com/wp-content/uploads/2026/09/ajifry.png',
+    'https://teppanyaki-toda.com/wp-content/uploads/2026/11/11月おすすめ弁当.png',
 
   allowLargeRice: true,
   soldOut: true,
