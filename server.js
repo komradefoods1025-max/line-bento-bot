@@ -190,11 +190,11 @@ const DRINK_OPTIONS = [
 
 const DEFAULT_DAILY_MENU = {
 
-  name: ‘秋のきのこあんかけハンバーグ弁当,
+  name: '秋のきのこあんかけハンバーグ弁当',
 
   price: 980,
 
-  description: '期間限定・数量限定！旬なきのことジューシーハンバーグ
+  description: '期間限定・数量限定！旬なきのことジューシーハンバーグ',
 
   imageUrl:
 
