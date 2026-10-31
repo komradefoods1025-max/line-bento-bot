@@ -244,7 +244,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/5.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/5.png',
 
     allowLargeRice: true
 
@@ -260,7 +260,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/3.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/3.png',
 
     allowLargeRice: true
 
@@ -276,7 +276,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/6.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/6.png',
 
     allowLargeRice: true
 
@@ -292,7 +292,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/9.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/9.png',
 
     allowLargeRice: true
 
@@ -308,7 +308,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/4.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/4.png',
 
     allowLargeRice: true
 
@@ -324,7 +324,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/2.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/2.png',
 
     allowLargeRice: true
 
@@ -340,7 +340,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/1.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/1.png',
 
     allowLargeRice: true
 
@@ -356,7 +356,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/%E3%83%81%E3%82%AD%E3%83%B3%E3%82%AB%E3%83%84%E5%BC%81%E5%BD%93.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/チキンカツ弁当.png',
 
     allowLargeRice: true
 
@@ -372,7 +372,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/05/7.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/チキンカツ弁当-タルタルソースがけ.png',
 
     allowLargeRice: true
 
@@ -388,7 +388,7 @@ const MENUS = {
 
     imageUrl:
 
-      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/%E3%83%81%E3%82%AD%E3%83%B3%E3%82%AB%E3%83%84%E3%81%8A%E3%82%8D%E3%81%97%E3%83%9D%E3%83%B3%E9%85%A2%EF%BC%BF%E3%83%90%E3%83%A9%E3%83%B3.png',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/チキンカツおろしポン酢.png',
 
     allowLargeRice: true
 
@@ -408,7 +408,7 @@ const EXTRA_MENUS = {
 
     imageUrl:
 
-      'https://komradefoods1025-geskw.wpcomstaging.com/wp-content/uploads/2026/04/SCN_20260409_2239.pdf.jpg',
+      'https://teppanyaki-toda.com/wp-content/uploads/2026/05/サイト用_追加唐揚げロ.png',
 
     allowLargeRice: false,
 
